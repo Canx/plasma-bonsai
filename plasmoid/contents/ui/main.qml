@@ -124,21 +124,75 @@ Item {
                 delegate: Item {
                     id: bubbleDelegate
                     width: chatListView.width
-                    height: bubbleBox.height + 10
+                    height: isWelcome ? welcomeCard.height + 12 : bubbleBox.height + 10
 
+                    readonly property bool isWelcome: model.role === "welcome"
+                    readonly property bool isUser: model.role === "user"
+
+                    // Tarjeta de Bienvenida centrada
                     Rectangle {
-                        id: bubbleBox
+                        id: welcomeCard
+                        visible: bubbleDelegate.isWelcome
+                        anchors.horizontalCenter: parent.horizontalCenter
                         anchors.top: parent.top
                         anchors.topMargin: 4
-                        anchors.left: model.role === "user" ? undefined : parent.left
-                        anchors.right: model.role === "user" ? parent.right : undefined
+                        width: Math.min(bubbleDelegate.width - 24, 460)
+                        height: welcomeCol.implicitHeight + 18
+                        radius: 8
+                        color: PlasmaCore.Theme.backgroundColor
+                        border.color: "#27ae60"
+                        border.width: 1
+
+                        ColumnLayout {
+                            id: welcomeCol
+                            anchors.fill: parent
+                            anchors.margins: 10
+                            spacing: 6
+
+                            RowLayout {
+                                Layout.alignment: Qt.AlignHCenter
+                                spacing: 8
+
+                                PlasmaCore.IconItem {
+                                    source: "preferences-system-network-sharing"
+                                    Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                                    Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                                }
+
+                                PlasmaComponents.Label {
+                                    text: "Bonsai Assistant"
+                                    font.bold: true
+                                    color: "#27ae60"
+                                }
+                            }
+
+                            PlasmaComponents.Label {
+                                Layout.fillWidth: true
+                                text: model.text
+                                wrapMode: Text.Wrap
+                                horizontalAlignment: Text.AlignHCenter
+                                textFormat: Text.PlainText
+                                opacity: 0.9
+                                color: PlasmaCore.Theme.textColor
+                            }
+                        }
+                    }
+
+                    // Burbujas de conversación normales
+                    Rectangle {
+                        id: bubbleBox
+                        visible: !bubbleDelegate.isWelcome
+                        anchors.top: parent.top
+                        anchors.topMargin: 4
+                        anchors.left: bubbleDelegate.isUser ? undefined : parent.left
+                        anchors.right: bubbleDelegate.isUser ? parent.right : undefined
                         anchors.leftMargin: 10
                         anchors.rightMargin: 10
 
                         width: Math.min(bubbleDelegate.width * 0.90, 500)
                         height: innerCol.implicitHeight + 18
                         radius: 8
-                        color: model.role === "user" 
+                        color: bubbleDelegate.isUser 
                                ? PlasmaCore.Theme.highlightColor 
                                : PlasmaCore.Theme.backgroundColor
                         border.color: PlasmaCore.Theme.disabledTextColor
@@ -151,10 +205,10 @@ Item {
                             spacing: 4
 
                             PlasmaComponents.Label {
-                                text: model.role === "user" ? "Tú" : "Bonsai"
+                                text: bubbleDelegate.isUser ? "Tú" : "Bonsai"
                                 font.bold: true
                                 font.pointSize: Kirigami.Theme.smallFont.pointSize
-                                color: model.role === "user" ? PlasmaCore.Theme.highlightedTextColor : "#27ae60"
+                                color: bubbleDelegate.isUser ? PlasmaCore.Theme.highlightedTextColor : "#27ae60"
                             }
 
                             PlasmaComponents.Label {
@@ -163,7 +217,7 @@ Item {
                                 text: model.text
                                 wrapMode: Text.Wrap
                                 textFormat: Text.PlainText
-                                color: model.role === "user" 
+                                color: bubbleDelegate.isUser 
                                        ? PlasmaCore.Theme.highlightedTextColor 
                                        : PlasmaCore.Theme.textColor
                             }
@@ -293,7 +347,7 @@ Item {
 
     Component.onCompleted: {
         chatModel.append({
-            "role": "assistant",
+            "role": "welcome",
             "text": "¡Hola! Soy Bonsai, tu asistente local en KDE Plasma. Puedo ayudarte con tareas, responder preguntas o controlar funciones de tu escritorio (brillo, volumen, capturas, notificaciones).",
             "toolInfo": ""
         })
@@ -315,8 +369,8 @@ Item {
     function clearChat() {
         chatModel.clear()
         chatModel.append({
-            "role": "assistant",
-            "text": "Conversación reiniciada. ¿En qué te ayudo ahora?",
+            "role": "welcome",
+            "text": "Conversación reiniciada. ¿En qué te puedo ayudar ahora?",
             "toolInfo": ""
         })
         var xhr = new XMLHttpRequest()
