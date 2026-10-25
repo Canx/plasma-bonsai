@@ -4,13 +4,15 @@ import QtQuick.Controls 2.15
 import org.kde.plasma.core 2.0 as PlasmaCore
 import org.kde.plasma.plasmoid 2.0
 import org.kde.plasma.components 3.0 as PlasmaComponents
-import org.kde.plasma.extras 2.0 as PlasmaExtras
 import org.kde.kirigami 2.20 as Kirigami
 
 Item {
     id: root
 
-    Plasmoid.preferredRepresentation: Plasmoid.compactRepresentation
+    // En panel usa representación compacta, en escritorio usa representación completa
+    Plasmoid.preferredRepresentation: (Plasmoid.formFactor === PlasmaCore.Types.Horizontal || Plasmoid.formFactor === PlasmaCore.Types.Vertical)
+                                      ? Plasmoid.compactRepresentation
+                                      : Plasmoid.fullRepresentation
 
     Plasmoid.icon: "preferences-system-network-sharing"
     Plasmoid.title: "Bonsai AI Assistant"
@@ -24,7 +26,7 @@ Item {
         id: chatModel
     }
 
-    // Representación compacta (icono en la barra de tareas)
+    // Representación compacta (icono para paneles)
     Plasmoid.compactRepresentation: MouseArea {
         id: compactArea
         hoverEnabled: true
@@ -39,12 +41,13 @@ Item {
         }
     }
 
-    // Representación completa (ventana flotante/desplegable)
+    // Representación completa (ventana flotante o widget en escritorio)
     Plasmoid.fullRepresentation: Item {
+        id: fullRepItem
         Layout.minimumWidth: Kirigami.Units.gridUnit * 22
-        Layout.minimumHeight: Kirigami.Units.gridUnit * 28
+        Layout.minimumHeight: Kirigami.Units.gridUnit * 26
         Layout.preferredWidth: Kirigami.Units.gridUnit * 26
-        Layout.preferredHeight: Kirigami.Units.gridUnit * 32
+        Layout.preferredHeight: Kirigami.Units.gridUnit * 30
 
         ColumnLayout {
             anchors.fill: parent
@@ -72,7 +75,7 @@ Item {
                     width: Kirigami.Units.gridUnit * 0.5
                     height: width
                     radius: width / 2
-                    color: root.daemonConnected ? Kirigami.Theme.positiveTextColor : Kirigami.Theme.neutralTextColor
+                    color: root.daemonConnected ? "#27ae60" : "#e74c3c"
                     Layout.alignment: Qt.AlignVCenter
                 }
 
@@ -95,8 +98,8 @@ Item {
             Rectangle {
                 Layout.fillWidth: true
                 height: 1
-                color: Kirigami.Theme.separatorColor
-                opacity: 0.5
+                color: PlasmaCore.Theme.disabledTextColor
+                opacity: 0.3
             }
 
             // Vista de mensajes
@@ -120,41 +123,40 @@ Item {
 
                 delegate: ColumnLayout {
                     width: chatListView.width - Kirigami.Units.gridUnit
-                    spacing: Kirigami.Units.smallSpacing * 0.5
+                    spacing: 4
 
-                    // Indicador de remitente
+                    // Nombre de remitente
                     PlasmaComponents.Label {
                         text: model.role === "user" ? "Tú" : "Bonsai"
                         font.bold: true
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
-                        color: model.role === "user" ? Kirigami.Theme.highlightColor : Kirigami.Theme.positiveTextColor
+                        color: model.role === "user" ? PlasmaCore.Theme.highlightColor : "#27ae60"
                         Layout.alignment: model.role === "user" ? Qt.AlignRight : Qt.AlignLeft
                     }
 
                     // Burbuja de contenido
                     Rectangle {
-                        Layout.fillWidth: false
-                        Layout.maximumWidth: parent.width * 0.92
+                        Layout.maximumWidth: parent.width * 0.90
                         Layout.alignment: model.role === "user" ? Qt.AlignRight : Qt.AlignLeft
-                        implicitWidth: messageText.implicitWidth + Kirigami.Units.largeSpacing
-                        implicitHeight: messageText.implicitHeight + Kirigami.Units.smallSpacing * 2
-                        radius: Kirigami.Units.smallSpacing
+                        width: Math.min(msgText.implicitWidth + 20, parent.width * 0.90)
+                        height: msgText.implicitHeight + 16
+                        radius: 6
                         color: model.role === "user" 
-                               ? Kirigami.Theme.highlightColor 
-                               : Kirigami.Theme.backgroundColor
-                        border.color: Kirigami.Theme.separatorColor
+                               ? PlasmaCore.Theme.highlightColor 
+                               : PlasmaCore.Theme.backgroundColor
+                        border.color: PlasmaCore.Theme.disabledTextColor
                         border.width: 1
 
                         PlasmaComponents.Label {
-                            id: messageText
-                            anchors.fill: parent
-                            anchors.margins: Kirigami.Units.smallSpacing
+                            id: msgText
+                            x: 10
+                            y: 8
+                            width: parent.width - 20
                             text: model.text
                             wrapMode: Text.Wrap
-                            textFormat: Text.PlainText
                             color: model.role === "user" 
-                                   ? Kirigami.Theme.highlightedTextColor 
-                                   : Kirigami.Theme.textColor
+                                   ? PlasmaCore.Theme.highlightedTextColor 
+                                   : PlasmaCore.Theme.textColor
                         }
                     }
 
@@ -162,11 +164,11 @@ Item {
                     Rectangle {
                         visible: model.toolInfo && model.toolInfo !== ""
                         Layout.alignment: Qt.AlignLeft
-                        implicitWidth: toolLabel.implicitWidth + Kirigami.Units.smallSpacing * 2
-                        implicitHeight: toolLabel.implicitHeight + 4
+                        width: toolLabel.implicitWidth + 16
+                        height: toolLabel.implicitHeight + 8
                         radius: 4
-                        color: Kirigami.Theme.neutralBackgroundColor
-                        border.color: Kirigami.Theme.separatorColor
+                        color: PlasmaCore.Theme.backgroundColor
+                        border.color: PlasmaCore.Theme.highlightColor
                         border.width: 1
 
                         PlasmaComponents.Label {
@@ -174,7 +176,7 @@ Item {
                             anchors.centerIn: parent
                             text: "🔧 " + (model.toolInfo || "")
                             font.pointSize: Kirigami.Theme.smallFont.pointSize * 0.9
-                            opacity: 0.85
+                            opacity: 0.9
                         }
                     }
                 }
@@ -187,7 +189,7 @@ Item {
                 spacing: Kirigami.Units.smallSpacing
 
                 Rectangle {
-                    color: Kirigami.Theme.highlightColor
+                    color: PlasmaCore.Theme.highlightColor
                     radius: 3
                     implicitWidth: imgBadge.implicitWidth + 8
                     implicitHeight: imgBadge.implicitHeight + 4
@@ -197,7 +199,7 @@ Item {
                         anchors.centerIn: parent
                         text: "📸 Captura de pantalla lista para analizar"
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
-                        color: Kirigami.Theme.highlightedTextColor
+                        color: PlasmaCore.Theme.highlightedTextColor
                     }
                 }
 
@@ -241,19 +243,31 @@ Item {
                 }
 
                 PlasmaComponents.TextField {
-                    id: promptField
+                    id: promptInput
                     Layout.fillWidth: true
                     placeholderText: "Pregunta o pide una acción a Bonsai..."
                     enabled: !root.isBusy
-                    onAccepted: root.sendMessage()
+                    onAccepted: {
+                        var val = promptInput.text.trim()
+                        if (val !== "" || root.capturedImageB64 !== "") {
+                            root.sendMessage(val)
+                            promptInput.text = ""
+                        }
+                    }
                 }
 
                 PlasmaComponents.Button {
                     id: sendBtn
                     icon.name: "document-send"
                     text: "Enviar"
-                    enabled: !root.isBusy && promptField.text.trim() !== ""
-                    onClicked: root.sendMessage()
+                    enabled: !root.isBusy && (promptInput.text.length > 0 || root.capturedImageB64 !== "")
+                    onClicked: {
+                        var val = promptInput.text.trim()
+                        if (val !== "" || root.capturedImageB64 !== "") {
+                            root.sendMessage(val)
+                            promptInput.text = ""
+                        }
+                    }
                 }
             }
         }
@@ -277,7 +291,7 @@ Item {
         })
     }
 
-    // Funciones de red hacia el demonio en 127.0.0.1:11435
+    // Funciones hacia el demonio en 127.0.0.1:11435
     function checkDaemonHealth() {
         var xhr = new XMLHttpRequest()
         xhr.open("GET", root.daemonUrl + "/health")
@@ -312,7 +326,7 @@ Item {
                 root.isBusy = false
                 if (xhr.status === 200) {
                     try {
-                        var res = jsonParse(xhr.responseText)
+                        var res = JSON.parse(xhr.responseText)
                         if (res.success && res.base64_image) {
                             root.capturedImageB64 = res.base64_image
                         }
@@ -325,8 +339,8 @@ Item {
         xhr.send(JSON.stringify({"mode": "fullscreen"}))
     }
 
-    function sendMessage() {
-        var text = promptField.text.trim()
+    function sendMessage(text) {
+        text = (text || "").trim()
         if (text === "" && root.capturedImageB64 === "") {
             return
         }
@@ -339,7 +353,6 @@ Item {
 
         var imgToSend = root.capturedImageB64
         root.capturedImageB64 = ""
-        promptField.text = ""
         root.isBusy = true
 
         var xhr = new XMLHttpRequest()
@@ -352,7 +365,7 @@ Item {
                 root.isBusy = false
                 if (xhr.status === 200) {
                     try {
-                        var res = jsonParse(xhr.responseText)
+                        var res = JSON.parse(xhr.responseText)
                         var toolsText = ""
                         if (res.tools_executed && res.tools_executed.length > 0) {
                             var tNames = []
@@ -379,7 +392,7 @@ Item {
                 } else {
                     var errText = "Error al comunicarse con el demonio de Bonsai."
                     try {
-                        var errJson = jsonParse(xhr.responseText)
+                        var errJson = JSON.parse(xhr.responseText)
                         if (errJson.error) {
                             errText = errJson.error
                         }
@@ -397,9 +410,5 @@ Item {
             "message": text,
             "image_b64": imgToSend
         }))
-    }
-
-    function jsonParse(str) {
-        return JSON.parse(str)
     }
 }
