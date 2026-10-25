@@ -12,3 +12,4 @@ env/
 *.swo
 *~
 /tmp/
+*.plasmoid
