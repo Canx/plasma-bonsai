@@ -7,18 +7,22 @@ ID="org.kde.plasma.bonsai"
 
 echo "=== Instalando Plasmoid: $ID ==="
 
-# Comprobar herramienta de empaquetado
-if command -v kpackagetool5 &>/dev/null; then
-    TOOL="kpackagetool5"
-elif command -v kpackagetool6 &>/dev/null; then
+# Priorizar kpackagetool6 para KDE Plasma 6
+if command -v kpackagetool6 &>/dev/null; then
     TOOL="kpackagetool6"
+elif command -v kpackagetool5 &>/dev/null; then
+    TOOL="kpackagetool5"
 else
     echo "Error: kpackagetool no encontrado."
     exit 1
 fi
 
+echo "Usando herramienta: $TOOL"
+
 # Desinstalar versión previa si existe
 $TOOL --type Plasma/Applet --remove "$ID" 2>/dev/null || true
+rm -rf "$HOME/.local/share/plasma/plasmoids/$ID"
+rm -rf "$HOME/.local/share/$ID"
 
 # Instalar nueva versión
 $TOOL --type Plasma/Applet --install "$PLASMOID_DIR"

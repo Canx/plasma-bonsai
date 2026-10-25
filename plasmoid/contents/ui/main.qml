@@ -1,18 +1,13 @@
-import QtQuick 2.15
-import QtQuick.Layouts 1.15
-import QtQuick.Controls 2.15
-import org.kde.plasma.core 2.0 as PlasmaCore
-import org.kde.plasma.plasmoid 2.0
-import org.kde.plasma.components 3.0 as PlasmaComponents
-import org.kde.kirigami 2.20 as Kirigami
+import QtQuick
+import QtQuick.Layouts
+import QtQuick.Controls
+import org.kde.plasma.core as PlasmaCore
+import org.kde.plasma.plasmoid
+import org.kde.plasma.components as PlasmaComponents
+import org.kde.kirigami as Kirigami
 
-Item {
+PlasmoidItem {
     id: root
-
-    // En panel usa representación compacta, en escritorio usa representación completa
-    Plasmoid.preferredRepresentation: (Plasmoid.formFactor === PlasmaCore.Types.Horizontal || Plasmoid.formFactor === PlasmaCore.Types.Vertical)
-                                      ? Plasmoid.compactRepresentation
-                                      : Plasmoid.fullRepresentation
 
     Plasmoid.icon: "preferences-system-network-sharing"
     Plasmoid.title: "Bonsai AI Assistant"
@@ -35,22 +30,22 @@ Item {
     }
 
     // Representación compacta (icono para paneles)
-    Plasmoid.compactRepresentation: MouseArea {
+    compactRepresentation: MouseArea {
         id: compactArea
         hoverEnabled: true
-        onClicked: Plasmoid.expanded = !Plasmoid.expanded
+        onClicked: root.expanded = !root.expanded
 
-        PlasmaCore.IconItem {
+        Kirigami.Icon {
             anchors.centerIn: parent
             width: Math.min(parent.width, parent.height) - Kirigami.Units.smallSpacing
             height: width
-            source: Plasmoid.icon
+            source: root.Plasmoid.icon
             active: compactArea.containsMouse
         }
     }
 
     // Representación completa (ventana flotante o widget en escritorio)
-    Plasmoid.fullRepresentation: Item {
+    fullRepresentation: Item {
         id: fullRepItem
         Layout.minimumWidth: Kirigami.Units.gridUnit * 22
         Layout.minimumHeight: Kirigami.Units.gridUnit * 26
@@ -67,7 +62,7 @@ Item {
                 Layout.fillWidth: true
                 spacing: Kirigami.Units.smallSpacing
 
-                PlasmaCore.IconItem {
+                Kirigami.Icon {
                     source: "preferences-system-network-sharing"
                     Layout.preferredWidth: Kirigami.Units.iconSizes.small
                     Layout.preferredHeight: Kirigami.Units.iconSizes.small
@@ -158,7 +153,7 @@ Item {
             Rectangle {
                 Layout.fillWidth: true
                 height: 1
-                color: PlasmaCore.Theme.disabledTextColor
+                color: Kirigami.Theme.disabledTextColor
                 opacity: 0.3
             }
 
@@ -199,7 +194,7 @@ Item {
                         width: Math.min(bubbleDelegate.width - 24, 460)
                         height: welcomeCol.implicitHeight + 18
                         radius: 8
-                        color: PlasmaCore.Theme.backgroundColor
+                        color: Kirigami.Theme.backgroundColor
                         border.color: "#27ae60"
                         border.width: 1
 
@@ -215,7 +210,7 @@ Item {
                                 Layout.alignment: Qt.AlignHCenter
                                 spacing: 8
 
-                                PlasmaCore.IconItem {
+                                Kirigami.Icon {
                                     source: "preferences-system-network-sharing"
                                     Layout.preferredWidth: Kirigami.Units.iconSizes.small
                                     Layout.preferredHeight: Kirigami.Units.iconSizes.small
@@ -235,7 +230,7 @@ Item {
                                 horizontalAlignment: Text.AlignHCenter
                                 textFormat: Text.PlainText
                                 opacity: 0.9
-                                color: PlasmaCore.Theme.textColor
+                                color: Kirigami.Theme.textColor
                             }
                         }
                     }
@@ -255,9 +250,9 @@ Item {
                         height: innerCol.implicitHeight + 18
                         radius: 8
                         color: bubbleDelegate.isUser 
-                               ? PlasmaCore.Theme.highlightColor 
-                               : PlasmaCore.Theme.backgroundColor
-                        border.color: PlasmaCore.Theme.disabledTextColor
+                               ? Kirigami.Theme.highlightColor 
+                               : Kirigami.Theme.backgroundColor
+                        border.color: Kirigami.Theme.disabledTextColor
                         border.width: 1
 
                         Column {
@@ -272,7 +267,7 @@ Item {
                                 text: bubbleDelegate.isUser ? "Tú" : "Bonsai"
                                 font.bold: true
                                 font.pointSize: Kirigami.Theme.smallFont.pointSize
-                                color: bubbleDelegate.isUser ? PlasmaCore.Theme.highlightedTextColor : "#27ae60"
+                                color: bubbleDelegate.isUser ? Kirigami.Theme.highlightedTextColor : "#27ae60"
                             }
 
                             PlasmaComponents.Label {
@@ -282,8 +277,8 @@ Item {
                                 wrapMode: Text.Wrap
                                 textFormat: Text.PlainText
                                 color: bubbleDelegate.isUser 
-                                       ? PlasmaCore.Theme.highlightedTextColor 
-                                       : PlasmaCore.Theme.textColor
+                                       ? Kirigami.Theme.highlightedTextColor 
+                                       : Kirigami.Theme.textColor
                             }
 
                             Rectangle {
@@ -291,8 +286,8 @@ Item {
                                 width: toolLabel.implicitWidth + 12
                                 height: toolLabel.implicitHeight + 4
                                 radius: 4
-                                color: PlasmaCore.Theme.backgroundColor
-                                border.color: PlasmaCore.Theme.highlightColor
+                                color: Kirigami.Theme.backgroundColor
+                                border.color: Kirigami.Theme.highlightColor
                                 border.width: 1
 
                                 PlasmaComponents.Label {
@@ -315,7 +310,7 @@ Item {
                 spacing: Kirigami.Units.smallSpacing
 
                 Rectangle {
-                    color: PlasmaCore.Theme.highlightColor
+                    color: Kirigami.Theme.highlightColor
                     radius: 3
                     implicitWidth: imgBadge.implicitWidth + 8
                     implicitHeight: imgBadge.implicitHeight + 4
@@ -325,7 +320,7 @@ Item {
                         anchors.centerIn: parent
                         text: "📸 Captura de pantalla lista para analizar"
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
-                        color: PlasmaCore.Theme.highlightedTextColor
+                        color: Kirigami.Theme.highlightedTextColor
                     }
                 }
 

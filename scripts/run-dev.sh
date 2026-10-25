@@ -8,10 +8,13 @@ ID="org.kde.plasma.bonsai"
 echo "=== Modo Desarrollo: Plasma Bonsai Assistant ==="
 
 # Asegurar que el Plasmoid está instalado en el usuario para testing
-if command -v kpackagetool5 &>/dev/null; then
+if command -v kpackagetool6 &>/dev/null; then
+    TOOL="kpackagetool6"
+elif command -v kpackagetool5 &>/dev/null; then
     TOOL="kpackagetool5"
 else
-    TOOL="kpackagetool6"
+    echo "Error: kpackagetool no encontrado."
+    exit 1
 fi
 
 $TOOL --type Plasma/Applet --upgrade "$PLASMOID_DIR" 2>/dev/null || $TOOL --type Plasma/Applet --install "$PLASMOID_DIR" 2>/dev/null || true
