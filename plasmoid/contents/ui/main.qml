@@ -17,11 +17,19 @@ PlasmoidItem {
     property string ollamaUrl: "http://127.0.0.1:11434"
     property bool ollamaConnected: false
     property bool isBusy: false
+    property bool isRecordingVoice: false
     property string capturedImageB64: ""
     property var availableModels: []
     property string currentModel: ""
     property var toolDefinitions: []
     property var conversationHistory: []
+
+    Timer {
+        id: startOllamaRetryTimer
+        interval: 1500
+        repeat: false
+        onTriggered: root.checkOllamaHealth()
+    }
 
     // Gestor de llamadas asíncronas a CLI / herramientas
     property var commandCallbacks: ({})
@@ -158,34 +166,46 @@ PlasmoidItem {
             Rectangle {
                 visible: !root.ollamaConnected || (root.ollamaConnected && root.availableModels.length === 0)
                 Layout.fillWidth: true
-                implicitHeight: warningCol.implicitHeight + 14
+                implicitHeight: warningRow.implicitHeight + 14
                 radius: 4
                 color: !root.ollamaConnected ? "#c0392b" : "#d35400"
 
-                ColumnLayout {
-                    id: warningCol
+                RowLayout {
+                    id: warningRow
                     anchors.fill: parent
                     anchors.margins: 7
-                    spacing: 3
+                    spacing: Kirigami.Units.smallSpacing
 
-                    PlasmaComponents.Label {
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        font.bold: true
-                        font.pointSize: Kirigami.Theme.smallFont.pointSize
-                        color: "#ffffff"
-                        text: !root.ollamaConnected 
-                              ? i18n("⚠️ Ollama is not running on localhost:11434")
-                              : i18n("⚠️ No models downloaded in Ollama")
+                        spacing: 2
+
+                        PlasmaComponents.Label {
+                            Layout.fillWidth: true
+                            font.bold: true
+                            font.pointSize: Kirigami.Theme.smallFont.pointSize
+                            color: "#ffffff"
+                            text: !root.ollamaConnected 
+                                  ? i18n("⚠️ Ollama is not running on localhost:11434")
+                                  : i18n("⚠️ No models downloaded in Ollama")
+                        }
+
+                        PlasmaComponents.Label {
+                            Layout.fillWidth: true
+                            font.pointSize: Kirigami.Theme.smallFont.pointSize * 0.9
+                            color: "#ffffff"
+                            wrapMode: Text.Wrap
+                            text: !root.ollamaConnected 
+                                  ? i18n("Click the button to start Ollama or run 'ollama serve'.")
+                                  : i18n("Download a model: 'ollama pull bonsai-2' or 'ollama pull qwen2.5'")
+                        }
                     }
 
-                    PlasmaComponents.Label {
-                        Layout.fillWidth: true
-                        font.pointSize: Kirigami.Theme.smallFont.pointSize * 0.9
-                        color: "#ffffff"
-                        wrapMode: Text.Wrap
-                        text: !root.ollamaConnected 
-                              ? i18n("Start it by running 'ollama serve' in a terminal.")
-                              : i18n("Download a model: 'ollama pull bonsai-2' or 'ollama pull qwen2.5'")
+                    PlasmaComponents.Button {
+                        visible: !root.ollamaConnected
+                        icon.name: "media-playback-start"
+                        text: i18n("Start")
+                        onClicked: root.startOllamaService()
                     }
                 }
             }
@@ -315,6 +335,18 @@ PlasmoidItem {
 
                                 Item { Layout.fillWidth: true }
 
+                                // Botón para escuchar respuesta (TTS)
+                                PlasmaComponents.ToolButton {
+                                    visible: !bubbleDelegate.isUser && model.text !== ""
+                                    icon.name: "audio-volume-high"
+                                    display: PlasmaComponents.AbstractButton.IconOnly
+                                    Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                                    Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                                    ToolTip.text: i18n("Listen to response")
+                                    ToolTip.visible: hovered
+                                    onClicked: root.speakResponse(model.text)
+                                }
+
                                 // Botón para copiar respuesta
                                 PlasmaComponents.ToolButton {
                                     visible: !bubbleDelegate.isUser && model.text !== ""
@@ -419,18 +451,28 @@ PlasmoidItem {
                 spacing: Kirigami.Units.smallSpacing
 
                 PlasmaComponents.ToolButton {
+                    id: micBtn
+                    icon.name: root.isRecordingVoice ? "media-record" : "audio-input-microphone"
+                    display: PlasmaComponents.AbstractButton.IconOnly
+                    ToolTip.text: root.isRecordingVoice ? i18n("Stop recording and send") : i18n("Voice input (Push-to-talk)")
+                    ToolTip.visible: hovered
+                    enabled: !root.isBusy
+                    onClicked: root.toggleVoiceInput()
+                }
+
+                PlasmaComponents.ToolButton {
                     icon.name: "camera-photo"
                     ToolTip.text: i18n("Capture screenshot to analyze")
                     ToolTip.visible: hovered
-                    enabled: !root.isBusy
+                    enabled: !root.isBusy && !root.isRecordingVoice
                     onClicked: root.requestScreenshot()
                 }
 
                 PlasmaComponents.TextField {
                     id: promptInput
                     Layout.fillWidth: true
-                    placeholderText: i18n("Ask or request an action from Bonsai…")
-                    enabled: !root.isBusy
+                    placeholderText: root.isRecordingVoice ? i18n("🔴 Listening… Click mic again to send") : i18n("Ask or request an action from Bonsai…")
+                    enabled: !root.isBusy && !root.isRecordingVoice
                     onAccepted: {
                         var val = promptInput.text.trim()
                         if (val !== "" || root.capturedImageB64 !== "") {
@@ -482,6 +524,57 @@ PlasmoidItem {
         if (!text) return
         var safe = text.replace(/'/g, "'\\''")
         root.runCli("printf '%s' '" + safe + "' | wl-copy 2>/dev/null || printf '%s' '" + safe + "' | xclip -selection clipboard 2>/dev/null", null)
+    }
+
+    function startOllamaService() {
+        root.runCli("python3 '" + root.toolsScriptPath + "' start_ollama", (code, stdout) => {
+            startOllamaRetryTimer.start()
+        })
+    }
+
+    function speakResponse(text) {
+        if (!text) return
+        var safe = text.replace(/'/g, "'\\''")
+        root.runCli("python3 '" + root.toolsScriptPath + "' speak '" + safe + "'", null)
+    }
+
+    function toggleVoiceInput() {
+        if (!root.isRecordingVoice) {
+            // Iniciar captura de audio
+            root.isRecordingVoice = true
+            root.runCli("python3 '" + root.toolsScriptPath + "' record start", (code, stdout) => {
+                try {
+                    var res = JSON.parse(stdout.trim())
+                    if (!res.success) {
+                        root.isRecordingVoice = false
+                    }
+                } catch (e) {
+                    root.isRecordingVoice = false
+                }
+            })
+        } else {
+            // Detener captura y transcribir con Whisper
+            root.isRecordingVoice = false
+            root.isBusy = true
+            root.runCli("python3 '" + root.toolsScriptPath + "' record stop", (code, stdout) => {
+                root.runCli("python3 '" + root.toolsScriptPath + "' transcribe", (code2, stdout2) => {
+                    root.isBusy = false
+                    try {
+                        var res2 = JSON.parse(stdout2.trim())
+                        if (res2.success && res2.text && res2.text.trim() !== "") {
+                            var spokenText = res2.text.trim()
+                            root.sendMessage(spokenText)
+                        } else if (res2.not_installed) {
+                            chatModel.append({
+                                "role": "assistant",
+                                "text": i18n("Whisper Speech-to-Text is not installed. You can install it with: ./scripts/install-voice.sh"),
+                                "toolInfo": ""
+                            })
+                        }
+                    } catch (e) {}
+                })
+            })
+        }
     }
 
     function loadToolSchema() {

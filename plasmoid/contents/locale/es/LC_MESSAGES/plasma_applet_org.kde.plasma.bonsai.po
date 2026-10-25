@@ -63,3 +63,24 @@ msgstr "Acción ejecutada"
 
 msgid "Error communicating with Ollama (%1). Make sure it is running."
 msgstr "Error al comunicarse con Ollama (%1). Asegúrate de que está en ejecución."
+
+msgid "Click the button to start Ollama or run 'ollama serve'."
+msgstr "Pulsa el botón para iniciar Ollama o ejecuta 'ollama serve'."
+
+msgid "Start"
+msgstr "Iniciar"
+
+msgid "Listen to response"
+msgstr "Escuchar respuesta"
+
+msgid "Stop recording and send"
+msgstr "Detener grabación y enviar"
+
+msgid "Voice input (Push-to-talk)"
+msgstr "Entrada de voz (Pulsar para hablar)"
+
+msgid "🔴 Listening… Click mic again to send"
+msgstr "🔴 Escuchando… Pulsa el micro para enviar"
+
+msgid "Whisper Speech-to-Text is not installed. You can install it with: ./scripts/install-voice.sh"
+msgstr "Whisper (reconocimiento de voz) no está instalado. Puedes instalarlo con: ./scripts/install-voice.sh"

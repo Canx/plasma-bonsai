@@ -12,6 +12,18 @@ import base64
 import subprocess
 import glob
 import re
+import shutil
+
+def get_bin(candidates):
+    for c in candidates:
+        if os.path.isabs(c):
+            if os.path.isfile(c) and os.access(c, os.X_OK):
+                return c
+        else:
+            p = shutil.which(c)
+            if p:
+                return p
+    return None
 
 def get_qdbus_bin():
     for cmd in ["qdbus6", "qdbus", "qdbus-qt6"]:
@@ -396,6 +408,193 @@ def _timer_worker(secs, label):
         "-i", "alarm-clock", "⏰ Temporizador finalizado", msg
     ])
 
+# -------------------------------------------------------------
+# Gestión de Ollama y Servicios
+# -------------------------------------------------------------
+def start_ollama():
+    """Arranca el servicio de Ollama si está instalado pero detenido"""
+    try:
+        subprocess.Popen(
+            "systemctl start ollama 2>/dev/null || systemctl --user start ollama 2>/dev/null || nohup ollama serve >/dev/null 2>&1 &",
+            shell=True
+        )
+        return {"success": True, "message": "Iniciando servicio de Ollama..."}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+# -------------------------------------------------------------
+# Entrada y Salida por Voz (STT y TTS)
+# -------------------------------------------------------------
+REC_PID_FILE = "/tmp/bonsai_rec.pid"
+REC_WAV_FILE = "/tmp/bonsai_mic.wav"
+
+def record_audio(action="toggle"):
+    import signal
+    is_recording = False
+    old_pid = None
+    if os.path.exists(REC_PID_FILE):
+        try:
+            with open(REC_PID_FILE, "r") as f:
+                old_pid = int(f.read().strip())
+            os.kill(old_pid, 0)
+            is_recording = True
+        except Exception:
+            is_recording = False
+
+    if action == "status":
+        return {"success": True, "is_recording": is_recording}
+
+    if (action == "stop" or (action == "toggle" and is_recording)) and is_recording:
+        try:
+            os.kill(old_pid, signal.SIGINT)
+        except Exception:
+            pass
+        if os.path.exists(REC_PID_FILE):
+            try: os.remove(REC_PID_FILE)
+            except Exception: pass
+        import time
+        time.sleep(0.3)
+        size = os.path.getsize(REC_WAV_FILE) if os.path.exists(REC_WAV_FILE) else 0
+        return {"success": True, "is_recording": False, "file": REC_WAV_FILE, "size_bytes": size}
+
+    elif action in ["start", "toggle"] and not is_recording:
+        if os.path.exists(REC_WAV_FILE):
+            try: os.remove(REC_WAV_FILE)
+            except Exception: pass
+
+        rec_bin = get_bin(["pw-record", "arecord"])
+        if not rec_bin:
+            return {"success": False, "error": "No se encontró pw-record ni arecord para capturar audio"}
+
+        if "pw-record" in rec_bin:
+            cmd = [rec_bin, "--channels", "1", "--rate", "16000", REC_WAV_FILE]
+        else:
+            cmd = [rec_bin, "-D", "default", "-f", "S16_LE", "-r", "16000", "-c", "1", REC_WAV_FILE]
+
+        p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        with open(REC_PID_FILE, "w") as f:
+            f.write(str(p.pid))
+        return {"success": True, "is_recording": True, "pid": p.pid}
+
+    return {"success": True, "is_recording": is_recording}
+
+def transcribe_audio():
+    if not os.path.exists(REC_WAV_FILE) or os.path.getsize(REC_WAV_FILE) < 100:
+        return {"success": False, "error": "No hay audio grabado o el archivo está vacío"}
+
+    whisper_bin = get_bin([
+        os.path.expanduser("~/.local/share/plasma-bonsai/bin/whisper-cli"),
+        "whisper-cli",
+        "/home/linuxbrew/.linuxbrew/bin/whisper",
+        "whisper"
+    ])
+
+    if not whisper_bin:
+        return {
+            "success": False,
+            "not_installed": True,
+            "error": "Motor Whisper no encontrado"
+        }
+
+    try:
+        if "whisper-cli" in whisper_bin:
+            model_path = os.path.expanduser("~/.local/share/plasma-bonsai/models/ggml-base.bin")
+            if not os.path.exists(model_path):
+                model_path = os.path.expanduser("~/.local/share/plasma-bonsai/models/ggml-tiny.bin")
+            out_base = "/tmp/bonsai_transcription"
+            out_txt = out_base + ".txt"
+            cmd = [whisper_bin, "-m", model_path, "-f", REC_WAV_FILE, "-l", "es", "--output-txt", "-of", out_base, "--no-timestamps"]
+            subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            text = ""
+            if os.path.exists(out_txt):
+                with open(out_txt, "r", encoding="utf-8") as f:
+                    text = f.read().strip()
+                os.remove(out_txt)
+            return {"success": True, "text": text}
+        else:
+            # Python whisper (e.g. Linuxbrew o pip)
+            cmd = [whisper_bin, REC_WAV_FILE, "--model", "tiny", "--language", "es", "--output_format", "txt", "--output_dir", "/tmp"]
+            subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            out_txt = "/tmp/bonsai_mic.txt"
+            text = ""
+            if os.path.exists(out_txt):
+                with open(out_txt, "r", encoding="utf-8") as f:
+                    text = f.read().strip()
+                os.remove(out_txt)
+            return {"success": True, "text": text}
+    except Exception as e:
+        return {"success": False, "error": f"Error en la transcripción: {e}"}
+
+def speak_text(text):
+    if not text:
+        return {"success": False, "error": "Texto vacío"}
+
+    # Limpiar formato Markdown para locución limpia
+    clean = re.sub(r'[*_`#~]', '', text)
+    clean = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', clean).strip()
+    # Tomar un resumen si es muy largo
+    if len(clean) > 400:
+        clean = clean[:400] + "..."
+
+    # 1. Probar Piper si está instalado
+    piper_bin = get_bin([
+        os.path.expanduser("~/.local/share/plasma-bonsai/bin/piper"),
+        "piper"
+    ])
+    piper_model = os.path.expanduser("~/.local/share/plasma-bonsai/models/es_ES-davefx-medium.onnx")
+
+    if piper_bin and os.path.exists(piper_model):
+        try:
+            wav_out = "/tmp/bonsai_tts.wav"
+            cmd = f"echo {clean!r} | {piper_bin} --model {piper_model} --output_file {wav_out} && (pw-play {wav_out} || paplay {wav_out}) && rm -f {wav_out}"
+            subprocess.Popen(cmd, shell=True)
+            return {"success": True, "engine": "piper"}
+        except Exception:
+            pass
+
+    # 2. Fallback a spd-say (nativo de Linux)
+    spd_bin = get_bin(["spd-say"])
+    if spd_bin:
+        try:
+            subprocess.Popen([spd_bin, "-l", "es", "-t", "female2", clean])
+            return {"success": True, "engine": "spd-say"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    # 3. Fallback a espeak
+    espeak_bin = get_bin(["espeak-ng", "espeak"])
+    if espeak_bin:
+        try:
+            subprocess.Popen([espeak_bin, "-v", "es", clean])
+            return {"success": True, "engine": "espeak"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    return {"success": False, "error": "No hay sintetizador de voz disponible"}
+
+def get_voice_status():
+    whisper_bin = get_bin([
+        os.path.expanduser("~/.local/share/plasma-bonsai/bin/whisper-cli"),
+        "whisper-cli",
+        "/home/linuxbrew/.linuxbrew/bin/whisper",
+        "whisper"
+    ])
+    mic_bin = get_bin(["pw-record", "arecord"])
+    piper_bin = get_bin([
+        os.path.expanduser("~/.local/share/plasma-bonsai/bin/piper"),
+        "piper"
+    ])
+    tts_bin = piper_bin or get_bin(["spd-say", "espeak-ng", "espeak"])
+
+    return {
+        "success": True,
+        "mic": mic_bin is not None,
+        "stt": whisper_bin is not None,
+        "stt_engine": os.path.basename(whisper_bin) if whisper_bin else None,
+        "tts": tts_bin is not None,
+        "tts_engine": os.path.basename(tts_bin) if tts_bin else None
+    }
+
 TOOL_DEFINITIONS = [
     {
         "type": "function",
@@ -567,6 +766,18 @@ if __name__ == "__main__":
     cmd = sys.argv[1]
     if cmd == "schema":
         print(json.dumps(TOOL_DEFINITIONS))
+    elif cmd == "start_ollama":
+        print(json.dumps(start_ollama()))
+    elif cmd == "record":
+        action = sys.argv[2] if len(sys.argv) >= 3 else "toggle"
+        print(json.dumps(record_audio(action)))
+    elif cmd == "transcribe":
+        print(json.dumps(transcribe_audio()))
+    elif cmd == "speak":
+        text = sys.argv[2] if len(sys.argv) >= 3 else ""
+        print(json.dumps(speak_text(text)))
+    elif cmd == "voice_status":
+        print(json.dumps(get_voice_status()))
     elif cmd == "_run_timer":
         if len(sys.argv) >= 3:
             secs = int(float(sys.argv[2]))
