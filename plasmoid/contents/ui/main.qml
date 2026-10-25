@@ -121,62 +121,70 @@ Item {
                     })
                 }
 
-                delegate: ColumnLayout {
-                    width: chatListView.width - Kirigami.Units.gridUnit
-                    spacing: 4
+                delegate: Item {
+                    id: bubbleDelegate
+                    width: chatListView.width
+                    height: bubbleBox.height + 10
 
-                    // Nombre de remitente
-                    PlasmaComponents.Label {
-                        text: model.role === "user" ? "Tú" : "Bonsai"
-                        font.bold: true
-                        font.pointSize: Kirigami.Theme.smallFont.pointSize
-                        color: model.role === "user" ? PlasmaCore.Theme.highlightColor : "#27ae60"
-                        Layout.alignment: model.role === "user" ? Qt.AlignRight : Qt.AlignLeft
-                    }
-
-                    // Burbuja de contenido
                     Rectangle {
-                        Layout.maximumWidth: parent.width * 0.90
-                        Layout.alignment: model.role === "user" ? Qt.AlignRight : Qt.AlignLeft
-                        width: Math.min(msgText.implicitWidth + 20, parent.width * 0.90)
-                        height: msgText.implicitHeight + 16
-                        radius: 6
+                        id: bubbleBox
+                        anchors.top: parent.top
+                        anchors.topMargin: 4
+                        anchors.left: model.role === "user" ? undefined : parent.left
+                        anchors.right: model.role === "user" ? parent.right : undefined
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 10
+
+                        width: Math.min(bubbleDelegate.width * 0.90, 500)
+                        height: innerCol.implicitHeight + 18
+                        radius: 8
                         color: model.role === "user" 
                                ? PlasmaCore.Theme.highlightColor 
                                : PlasmaCore.Theme.backgroundColor
                         border.color: PlasmaCore.Theme.disabledTextColor
                         border.width: 1
 
-                        PlasmaComponents.Label {
-                            id: msgText
-                            x: 10
-                            y: 8
-                            width: parent.width - 20
-                            text: model.text
-                            wrapMode: Text.Wrap
-                            color: model.role === "user" 
-                                   ? PlasmaCore.Theme.highlightedTextColor 
-                                   : PlasmaCore.Theme.textColor
-                        }
-                    }
+                        Column {
+                            id: innerCol
+                            anchors.fill: parent
+                            anchors.margins: 9
+                            spacing: 4
 
-                    // Distintivo de herramientas ejecutadas
-                    Rectangle {
-                        visible: model.toolInfo && model.toolInfo !== ""
-                        Layout.alignment: Qt.AlignLeft
-                        width: toolLabel.implicitWidth + 16
-                        height: toolLabel.implicitHeight + 8
-                        radius: 4
-                        color: PlasmaCore.Theme.backgroundColor
-                        border.color: PlasmaCore.Theme.highlightColor
-                        border.width: 1
+                            PlasmaComponents.Label {
+                                text: model.role === "user" ? "Tú" : "Bonsai"
+                                font.bold: true
+                                font.pointSize: Kirigami.Theme.smallFont.pointSize
+                                color: model.role === "user" ? PlasmaCore.Theme.highlightedTextColor : "#27ae60"
+                            }
 
-                        PlasmaComponents.Label {
-                            id: toolLabel
-                            anchors.centerIn: parent
-                            text: "🔧 " + (model.toolInfo || "")
-                            font.pointSize: Kirigami.Theme.smallFont.pointSize * 0.9
-                            opacity: 0.9
+                            PlasmaComponents.Label {
+                                id: msgLabel
+                                width: parent.width
+                                text: model.text
+                                wrapMode: Text.Wrap
+                                textFormat: Text.PlainText
+                                color: model.role === "user" 
+                                       ? PlasmaCore.Theme.highlightedTextColor 
+                                       : PlasmaCore.Theme.textColor
+                            }
+
+                            Rectangle {
+                                visible: model.toolInfo && model.toolInfo !== ""
+                                width: toolLabel.implicitWidth + 12
+                                height: toolLabel.implicitHeight + 4
+                                radius: 4
+                                color: PlasmaCore.Theme.backgroundColor
+                                border.color: PlasmaCore.Theme.highlightColor
+                                border.width: 1
+
+                                PlasmaComponents.Label {
+                                    id: toolLabel
+                                    anchors.centerIn: parent
+                                    text: "🔧 " + (model.toolInfo || "")
+                                    font.pointSize: Kirigami.Theme.smallFont.pointSize * 0.9
+                                    opacity: 0.9
+                                }
+                            }
                         }
                     }
                 }
@@ -286,7 +294,7 @@ Item {
     Component.onCompleted: {
         chatModel.append({
             "role": "assistant",
-            "text": "¡Hola Rubén! Soy Bonsai, tu asistente local en KDE Plasma. Puedo ayudarte con tareas, responder preguntas o controlar funciones de tu escritorio (brillo, volumen, capturas, notificaciones).",
+            "text": "¡Hola! Soy Bonsai, tu asistente local en KDE Plasma. Puedo ayudarte con tareas, responder preguntas o controlar funciones de tu escritorio (brillo, volumen, capturas, notificaciones).",
             "toolInfo": ""
         })
     }

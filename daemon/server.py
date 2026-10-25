@@ -8,6 +8,9 @@ import sys
 import os
 import json
 import logging
+import getpass
+import pwd
+import subprocess
 import requests
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
@@ -23,18 +26,46 @@ OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
 DEFAULT_MODEL = os.environ.get("BONSAI_MODEL", "bonsai-2:latest")
 PORT = int(os.environ.get("BONSAI_PORT", 11435))
 
-# Historial de conversación en memoria
-conversation_history = [
-    {
+def get_user_display_name():
+    """Detecta dinámicamente el nombre del usuario del sistema"""
+    # 1. Nombre completo en /etc/passwd (GECOS)
+    try:
+        gecos = pwd.getpwuid(os.getuid()).pw_gecos.split(',')[0].strip()
+        if gecos:
+            return gecos.split()[0]
+    except Exception:
+        pass
+    # 2. Configuración de Git
+    try:
+        out = subprocess.check_output(["git", "config", "user.name"], text=True).strip()
+        if out:
+            return out.split()[0]
+    except Exception:
+        pass
+    # 3. Nombre de usuario del sistema
+    try:
+        u = getpass.getuser()
+        if u:
+            return u.capitalize()
+    except Exception:
+        pass
+    return "Usuario"
+
+def create_system_prompt():
+    user_name = get_user_display_name()
+    return {
         "role": "system",
         "content": (
             "Eres Bonsai, un asistente inteligente integrado directamente en el escritorio KDE Plasma. "
             "Tienes herramientas para controlar el sistema (brillo, volumen, captura de pantalla, notificaciones). "
+            f"El usuario con el que interactúas se llama {user_name}. "
             "Responde de forma clara, concisa y amable en español. "
             "Cuando el usuario pida realizar una acción sobre el sistema, usa las herramientas provistas."
         )
     }
-]
+
+# Historial de conversación en memoria
+conversation_history = [create_system_prompt()]
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
@@ -88,7 +119,7 @@ class BonsaiRequestHandler(BaseHTTPRequestHandler):
 
         if self.path == "/clear":
             global conversation_history
-            conversation_history = [conversation_history[0]]  # Mantener system prompt
+            conversation_history = [create_system_prompt()]
             self._send_json(200, {"success": True, "message": "Historial reiniciado"})
 
         elif self.path == "/screenshot":
