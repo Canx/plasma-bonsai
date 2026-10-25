@@ -202,18 +202,74 @@ def launch_application(app_name, target=None):
         except Exception as e2:
             return {"success": False, "error": f"Error al abrir la app: {e2}"}
 
+def tile_all_windows():
+    """Organiza todas las ventanas abiertas en pantalla en un mosaico real usando KWin Scripting"""
+    try:
+        script = """
+var W = workspace.workspaceWidth;
+var H = workspace.workspaceHeight - 48; // Margen para el panel de Plasma
+var list = workspace.windowList();
+var wins = [];
+for (var i = 0; i < list.length; i++) {
+    var w = list[i];
+    if (w.normalWindow && !w.minimized) {
+        wins.push(w);
+    }
+}
+var N = wins.length;
+if (N === 1) {
+    wins[0].frameGeometry = { x: 0, y: 0, width: W, height: H };
+} else if (N === 2) {
+    var halfW = Math.floor(W / 2);
+    wins[0].frameGeometry = { x: 0, y: 0, width: halfW, height: H };
+    wins[1].frameGeometry = { x: halfW, y: 0, width: halfW, height: H };
+} else if (N === 3) {
+    var halfW = Math.floor(W / 2);
+    var halfH = Math.floor(H / 2);
+    wins[0].frameGeometry = { x: 0, y: 0, width: halfW, height: H };
+    wins[1].frameGeometry = { x: halfW, y: 0, width: halfW, height: halfH };
+    wins[2].frameGeometry = { x: halfW, y: halfH, width: halfW, height: halfH };
+} else if (N >= 4) {
+    var cols = Math.ceil(Math.sqrt(N));
+    var rows = Math.ceil(N / cols);
+    var cellW = Math.floor(W / cols);
+    var cellH = Math.floor(H / rows);
+    for (var k = 0; k < N; k++) {
+        var r = Math.floor(k / cols);
+        var c = k % cols;
+        wins[k].frameGeometry = { x: c * cellW, y: r * cellH, width: cellW, height: cellH };
+    }
+}
+"""
+        script_file = "/tmp/bonsai_tile.js"
+        with open(script_file, "w") as f:
+            f.write(script)
+
+        subprocess.check_call([QDBUS, "org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting.loadScript", script_file, "bonsai_tile"])
+        subprocess.check_call([QDBUS, "org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting.start"])
+        import time
+        time.sleep(0.3)
+        subprocess.check_call([QDBUS, "org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting.unloadScript", "bonsai_tile"])
+        if os.path.exists(script_file):
+            os.remove(script_file)
+        return {"success": True, "message": "Ventanas organizadas en mosaico"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 def manage_windows(action):
     try:
         act = action.lower().strip()
         if act == "show_desktop":
             subprocess.check_call([QDBUS, "org.kde.kglobalaccel", "/component/kwin", "org.kde.kglobalaccel.Component.invokeShortcut", "Show Desktop"])
             return {"success": True, "message": "Mostrando escritorio"}
-        elif act in ["toggle_present_windows", "overview"]:
+        elif act in ["overview"]:
             subprocess.check_call([QDBUS, "org.kde.kglobalaccel", "/component/kwin", "org.kde.kglobalaccel.Component.invokeShortcut", "Overview"])
             return {"success": True, "message": "Vista general de ventanas activada"}
-        elif act == "tile_split":
-            subprocess.check_call([QDBUS, "org.kde.kglobalaccel", "/component/kwin", "org.kde.kglobalaccel.Component.invokeShortcut", "Window Quick Tile Left"])
-            return {"success": True, "message": "Ventana anclada a la mitad"}
+        elif act in ["grid_view", "grid"]:
+            subprocess.check_call([QDBUS, "org.kde.kglobalaccel", "/component/kwin", "org.kde.kglobalaccel.Component.invokeShortcut", "Grid View"])
+            return {"success": True, "message": "Efecto cuadrícula de ventanas activado"}
+        elif act in ["tile_mosaic", "tile_split", "tile", "mosaico"]:
+            return tile_all_windows()
         else:
             return {"success": False, "error": f"Acción '{action}' no reconocida"}
     except Exception as e:
@@ -306,11 +362,15 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "manage_windows",
-            "description": "Gestiona ventanas abiertas del escritorio (vista general, mostrar escritorio, mosaico).",
+            "description": "Organiza o gestiona las ventanas abiertas en pantalla (mosaico automático de todas las ventanas, vista general interactiva, cuadrícula o mostrar escritorio).",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "enum": ["overview", "show_desktop", "tile_split"], "description": "Acción de ventana a ejecutar"}
+                    "action": {
+                        "type": "string",
+                        "enum": ["tile_mosaic", "overview", "grid_view", "show_desktop"],
+                        "description": "Acción a realizar: 'tile_mosaic' (organiza todas las ventanas abiertas en pantalla en mosaico automático), 'overview' (vista general interactiva), 'grid_view' (vista en cuadrícula), 'show_desktop' (mostrar/ocultar escritorio)"
+                    }
                 },
                 "required": ["action"]
             }
