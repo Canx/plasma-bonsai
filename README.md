@@ -13,6 +13,8 @@
 * 🔒 **100% Privado y Local:** Funciona contra tu servidor Ollama local en `localhost:11434`. Cero telemetría externa.
 * ⚡ **Integración Nativa con KDE:** Plasmoid escrito en QML / Kirigami, listo para anclarse a cualquier panel de Plasma o flotar en el escritorio.
 * 🛠️ **Tool Calling por D-Bus:** El modelo puede ejecutar acciones reales en tu sesión de KDE mediante llamadas a funciones:
+  * **Abrir aplicaciones:** Lanzamiento de apps nativas (`launch_application`: Terminal/Konsole, Kate, Navegador, Dolphin, etc.).
+  * **Organizar ventanas:** Control de ventanas (`manage_windows`: mosaico 50/50 `tile_split`, mostrar escritorio, cascada, desenredo, minimizar o cerrar).
   * **Fondo de pantalla:** Cambio dinámico mediante el motor de script de Plasma (`change_wallpaper`).
   * **Brillo de pantalla:** Consulta y ajuste porcentual a través de `org.kde.Solid.PowerManagement`.
   * **Audio del sistema:** Consulta, ajuste de volumen y mute usando PulseAudio / PipeWire.
@@ -106,6 +108,8 @@ Para probar el widget en una ventana aislada sin alterar tus paneles actuales:
 
 ## 🛠️ Ejemplos de Interacción
 
+* **Abrir aplicaciones:** *"Abre la terminal"*, *"Abre el editor de texto"* o *"Abre el navegador"*
+* **Organizar ventanas:** *"Organiza las ventanas en mosaico"* (dividir 50/50), *"Muestra el escritorio"* o *"Pon las ventanas en cascada"*
 * **Cambiar fondo de pantalla:** *"Cambia el fondo de pantalla por uno del espacio"* o *"Ponme un fondo oscuro"*
 * **Ajustar brillo:** *"Baja el brillo de la pantalla al 30%"*
 * **Controlar volumen:** *"Pon el volumen al 50%"* o *"Silencia el sonido"*

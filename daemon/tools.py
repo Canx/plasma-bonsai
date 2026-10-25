@@ -164,6 +164,142 @@ for (var i = 0; i < allDesktops.length; i++) {{
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+def launch_application(app_name, target=None):
+    """Abre una aplicación instalada en el sistema KDE / Linux"""
+    import shutil
+    app_map = {
+        "terminal": "konsole",
+        "consola": "konsole",
+        "navegador": "google-chrome",
+        "chrome": "google-chrome",
+        "google chrome": "google-chrome",
+        "firefox": "firefox",
+        "editor": "kate",
+        "kate": "kate",
+        "explorador": "dolphin",
+        "archivos": "dolphin",
+        "carpetas": "dolphin",
+        "dolphin": "dolphin",
+        "calculadora": "kcalc",
+        "ajustes": "systemsettings5",
+        "configuracion": "systemsettings5",
+        "preferencias": "systemsettings5",
+        "musica": "spotify",
+        "spotify": "spotify",
+        "vlc": "vlc",
+    }
+    clean = (app_name or "").lower().strip()
+    cmd = app_map.get(clean, clean)
+    bin_path = shutil.which(cmd)
+
+    if not bin_path:
+        try:
+            subprocess.Popen(["gtk-launch", clean], start_new_session=True)
+            return {"success": True, "message": f"Aplicación '{clean}' iniciada"}
+        except Exception:
+            return {"success": False, "error": f"No se encontró la aplicación '{app_name}' en el sistema."}
+
+    args = [bin_path]
+    if target:
+        args.append(str(target))
+
+    try:
+        subprocess.Popen(args, start_new_session=True)
+        return {"success": True, "message": f"Aplicación '{cmd}' abierta correctamente"}
+    except Exception as e:
+        return {"success": False, "error": f"Error abriendo aplicación: {str(e)}"}
+
+def get_visible_windows():
+    try:
+        out = subprocess.check_output(['xdotool', 'search', '--onlyvisible', '--name', '.*'], text=True)
+        res = []
+        for wid in out.splitlines():
+            wid = wid.strip()
+            if not wid: continue
+            try:
+                name = subprocess.check_output(['xdotool', 'getwindowname', wid], text=True).strip()
+                if name and 'Plasma' not in name and 'Escriptori' not in name:
+                    res.append({'id': wid, 'title': name})
+            except:
+                pass
+        return res
+    except Exception:
+        return []
+
+def manage_windows(action, target=None):
+    """Organiza o controla las ventanas en el escritorio"""
+    try:
+        if action == "show_desktop":
+            bus = dbus.SessionBus()
+            proxy = bus.get_object('org.kde.KWin', '/KWin')
+            iface = dbus.Interface(proxy, 'org.kde.KWin')
+            show = False if (target and str(target).lower() in ["false", "restore", "restaurar", "ocultar"]) else True
+            iface.showDesktop(show)
+            return {"success": True, "message": "Escritorio mostrado" if show else "Ventanas restauradas"}
+
+        elif action == "cascade":
+            bus = dbus.SessionBus()
+            proxy = bus.get_object('org.kde.KWin', '/KWin')
+            iface = dbus.Interface(proxy, 'org.kde.KWin')
+            iface.cascadeDesktop()
+            return {"success": True, "message": "Ventanas organizadas en cascada"}
+
+        elif action == "unclutter":
+            bus = dbus.SessionBus()
+            proxy = bus.get_object('org.kde.KWin', '/KWin')
+            iface = dbus.Interface(proxy, 'org.kde.KWin')
+            iface.unclutterDesktop()
+            return {"success": True, "message": "Ventanas organizadas sin solapamiento"}
+
+        elif action == "tile_split":
+            wins = get_visible_windows()
+            if len(wins) < 2:
+                return {"success": False, "error": "Se necesitan al menos 2 ventanas visibles para dividir la pantalla."}
+            w1, w2 = wins[0]["id"], wins[1]["id"]
+            subprocess.check_call(["xdotool", "windowsize", w1, "960", "1040", "windowmove", w1, "0", "0"])
+            subprocess.check_call(["xdotool", "windowsize", w2, "960", "1040", "windowmove", w2, "960", "0"])
+            return {
+                "success": True,
+                "message": f"Ventanas organizadas en mosaico 50/50: '{wins[0]['title']}' y '{wins[1]['title']}'"
+            }
+
+        elif action in ["minimize", "close", "focus"]:
+            wins = get_visible_windows()
+            if not wins:
+                return {"success": False, "error": "No hay ventanas abiertas"}
+
+            matched_wid = None
+            matched_title = ""
+            if target:
+                t_lower = str(target).lower()
+                for w in wins:
+                    if t_lower in w["title"].lower():
+                        matched_wid = w["id"]
+                        matched_title = w["title"]
+                        break
+            if not matched_wid:
+                matched_wid = wins[0]["id"]
+                matched_title = wins[0]["title"]
+
+            if action == "minimize":
+                subprocess.check_call(["xdotool", "windowminimize", matched_wid])
+                return {"success": True, "message": f"Ventana '{matched_title}' minimizada"}
+            elif action == "close":
+                subprocess.check_call(["xdotool", "windowclose", matched_wid])
+                return {"success": True, "message": f"Ventana '{matched_title}' cerrada"}
+            elif action == "focus":
+                subprocess.check_call(["xdotool", "windowactivate", matched_wid])
+                return {"success": True, "message": f"Ventana '{matched_title}' activada"}
+
+        elif action == "list":
+            wins = get_visible_windows()
+            titles = [w["title"] for w in wins]
+            return {"success": True, "windows": titles, "message": f"{len(titles)} ventanas abiertas: {', '.join(titles)}"}
+
+        return {"success": False, "error": f"Acción desconocida: {action}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 # Definiciones de herramientas para la API de Ollama
 TOOL_DEFINITIONS = [
     {
@@ -269,6 +405,49 @@ TOOL_DEFINITIONS = [
                 "required": ["theme_or_path"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "launch_application",
+            "description": "Abre o ejecuta una aplicación en el escritorio KDE Linux (ejemplos: 'terminal'/'konsole', 'navegador'/'chrome', 'firefox', 'kate', 'dolphin'/'archivos', 'calculadora', 'spotify', 'ajustes').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "app_name": {
+                        "type": "string",
+                        "description": "Nombre de la aplicación a abrir (ej: 'terminal', 'kate', 'chrome', 'dolphin', 'calculadora')."
+                    },
+                    "target": {
+                        "type": "string",
+                        "description": "Opcional: ruta de archivo o URL a abrir con la aplicación."
+                    }
+                },
+                "required": ["app_name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "manage_windows",
+            "description": "Gestiona y organiza las ventanas en el escritorio KDE. Permite dividir en mosaico 50/50 ('tile_split'), mostrar u ocultar escritorio ('show_desktop'), cascada ('cascade'), desenredar ('unclutter'), minimizar, cerrar o listar ventanas abiertas.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["tile_split", "show_desktop", "cascade", "unclutter", "minimize", "close", "focus", "list"],
+                        "description": "Acción a realizar con las ventanas."
+                    },
+                    "target": {
+                        "type": "string",
+                        "description": "Opcional: nombre o parte del título de la ventana específica (para minimize, close, focus)."
+                    }
+                },
+                "required": ["action"]
+            }
+        }
     }
 ]
 
@@ -300,5 +479,11 @@ def execute_tool_call(name, args):
 
     elif name == "change_wallpaper":
         return change_wallpaper(args.get("theme_or_path", "Next"))
+
+    elif name == "launch_application":
+        return launch_application(args.get("app_name"), args.get("target"))
+
+    elif name == "manage_windows":
+        return manage_windows(args.get("action", "list"), args.get("target"))
 
     return {"success": False, "error": f"Herramienta desconocida: {name}"}
