@@ -275,6 +275,127 @@ def manage_windows(action):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+# -------------------------------------------------------------
+# Gestión de Temporizadores y Alarmas
+# -------------------------------------------------------------
+TIMERS_FILE = "/tmp/bonsai_timers.json"
+
+def _load_timers():
+    try:
+        if os.path.exists(TIMERS_FILE):
+            with open(TIMERS_FILE, "r", encoding="utf-8") as f:
+                import time
+                timers = json.load(f)
+                now = time.time()
+                active = []
+                for t in timers:
+                    if t.get("ends_at", 0) > now:
+                        active.append(t)
+                return active
+    except Exception:
+        pass
+    return []
+
+def _save_timers(timers):
+    try:
+        with open(TIMERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(timers, f, indent=2)
+    except Exception:
+        pass
+
+def set_timer(minutes, label=None):
+    import time
+    try:
+        mins = float(minutes)
+        if mins <= 0:
+            return {"success": False, "error": "La duración debe ser mayor a 0"}
+        secs = int(round(mins * 60))
+        tag = label.strip() if label else "Temporizador"
+        ends_at = time.time() + secs
+
+        script_path = os.path.abspath(__file__)
+        cmd = [sys.executable, script_path, "_run_timer", str(secs), tag]
+        p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+
+        timers = _load_timers()
+        timer_info = {
+            "id": len(timers) + 1,
+            "label": tag,
+            "minutes": mins,
+            "ends_at": ends_at,
+            "pid": p.pid
+        }
+        timers.append(timer_info)
+        _save_timers(timers)
+
+        time_str = f"{int(mins)} min" if mins.is_integer() else f"{mins} min"
+        return {
+            "success": True,
+            "message": f"Temporizador de {time_str} activado ('{tag}'). Te avisaré con sonido y notificación cuando termine."
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+def list_timers():
+    import time
+    timers = _load_timers()
+    if not timers:
+        return {"success": True, "message": "No hay temporizadores activos"}
+    now = time.time()
+    lines = []
+    for t in timers:
+        remaining = int(max(0, t.get("ends_at", 0) - now))
+        mins_rem = remaining // 60
+        secs_rem = remaining % 60
+        lines.append(f"• {t.get('label')}: quedan {mins_rem}m {secs_rem}s")
+    return {"success": True, "message": "Temporizadores activos:\n" + "\n".join(lines)}
+
+def cancel_timers(label=None):
+    import signal
+    timers = _load_timers()
+    if not timers:
+        return {"success": True, "message": "No hay temporizadores activos para cancelar"}
+    canceled = 0
+    remaining_timers = []
+    for t in timers:
+        if not label or label.lower() in t.get("label", "").lower():
+            pid = t.get("pid")
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except Exception:
+                pass
+            canceled += 1
+        else:
+            remaining_timers.append(t)
+    _save_timers(remaining_timers)
+    return {"success": True, "message": f"{canceled} temporizador(es) cancelado(s)"}
+
+def _timer_worker(secs, label):
+    import time
+    time.sleep(secs)
+
+    # 1. Reproducir sonido de alarma nativo
+    sound_files = [
+        "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga",
+        "/usr/share/sounds/freedesktop/stereo/complete.oga",
+        "/usr/share/sounds/freedesktop/stereo/bell.oga"
+    ]
+    sound = next((s for s in sound_files if os.path.exists(s)), None)
+    if sound:
+        for player in ["pw-play", "paplay"]:
+            if subprocess.call(["which", player], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
+                subprocess.Popen([player, sound], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                break
+
+    # 2. Notificación nativa persistente de KDE
+    mins = secs / 60.0
+    time_str = f"{int(mins)} min" if mins.is_integer() else f"{mins:.1f} min"
+    msg = f"¡Han pasado {time_str} para '{label}'!" if label else f"¡Han pasado {time_str}!"
+    subprocess.call([
+        "notify-send", "-u", "critical", "-a", "Bonsai AI",
+        "-i", "alarm-clock", "⏰ Temporizador finalizado", msg
+    ])
+
 TOOL_DEFINITIONS = [
     {
         "type": "function",
@@ -375,6 +496,32 @@ TOOL_DEFINITIONS = [
                 "required": ["action"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "manage_timer",
+            "description": "Crea, consulta o cancela temporizadores y alarmas con aviso sonoro y notificación nativa.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["set", "list", "cancel"],
+                        "description": "Acción: 'set' para crear uno nuevo, 'list' para ver los activos, 'cancel' para cancelarlos"
+                    },
+                    "minutes": {
+                        "type": "number",
+                        "description": "Duración en minutos (ej: 5, 10, 0.5 para 30 segundos, 0.1 para 6 segundos). Requerido si action='set'"
+                    },
+                    "label": {
+                        "type": "string",
+                        "description": "Motivo o etiqueta del temporizador (ej: 'Pizza', 'Café', 'Pomodoro', 'Descanso')"
+                    }
+                },
+                "required": ["action"]
+            }
+        }
     }
 ]
 
@@ -401,6 +548,15 @@ def execute_tool(name, args):
         return launch_application(args.get("app_name", ""), args.get("target"))
     elif name == "manage_windows":
         return manage_windows(args.get("action", ""))
+    elif name == "manage_timer":
+        act = args.get("action", "set")
+        if act == "set":
+            return set_timer(args.get("minutes", 1), args.get("label"))
+        elif act == "list":
+            return list_timers()
+        elif act == "cancel":
+            return cancel_timers(args.get("label"))
+        return {"success": False, "error": f"Acción '{act}' no reconocida"}
     return {"success": False, "error": f"Herramienta desconocida: {name}"}
 
 if __name__ == "__main__":
@@ -411,6 +567,12 @@ if __name__ == "__main__":
     cmd = sys.argv[1]
     if cmd == "schema":
         print(json.dumps(TOOL_DEFINITIONS))
+    elif cmd == "_run_timer":
+        if len(sys.argv) >= 3:
+            secs = int(float(sys.argv[2]))
+            label = sys.argv[3] if len(sys.argv) >= 4 else ""
+            _timer_worker(secs, label)
+            sys.exit(0)
     elif cmd == "screenshot":
         res = take_screenshot()
         # Print only the base64 string on stdout if successful

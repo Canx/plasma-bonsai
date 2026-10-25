@@ -26,6 +26,7 @@ Funciona **100% en espacio de usuario**: no requiere demonios permanentes en seg
   * **Fondo de pantalla:** Cambio dinámico del wallpaper de Plasma según temática o archivo.
   * **Abrir aplicaciones:** Lanzamiento de apps (`terminal/konsole`, `kate`, `firefox`, `dolphin`, etc.).
   * **Gestión de ventanas:** Vista general de ventanas (*overview*), mostrar escritorio y mosaico 50/50.
+  * **Temporizadores y alarmas:** Avisos de cuenta atrás con sonido y notificación nativa (ej: *"Pon un temporizador de 10 minutos para la pizza"*).
   * **Seguridad y avisos:** Bloqueo inmediato de sesión y notificaciones nativas del escritorio.
 
 ---
@@ -124,6 +125,7 @@ Para probar el widget en una ventana flotante de desarrollo sin alterar tus pane
 * **Cambiar fondo:** *"Pon un fondo de pantalla oscuro"* o *"Cambia el fondo a uno de montaña"*
 * **Abrir aplicaciones:** *"Abre la terminal"*, *"Abre Kate"* o *"Abre el navegador"*
 * **Gestión de ventanas:** *"Muestra el escritorio"* o *"Pon la ventana en mosaico"*
+* **Temporizadores y alarmas:** *"Pon un temporizador de 10 minutos para la pizza"*, *"¿Cuánto queda de temporizador?"* o *"Cancela la alarma"*
 * **Analizar la pantalla:** Pulsa el icono de la cámara 📸 y escribe *"¿Qué error se ve en esta pantalla?"*
 * **Bloquear escritorio:** *"Bloquea la sesión"*
 
