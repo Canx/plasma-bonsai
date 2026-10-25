@@ -484,7 +484,9 @@ def transcribe_audio():
 
     whisper_bin = get_bin([
         os.path.expanduser("~/.local/share/plasma-bonsai/bin/whisper-cli"),
+        "/home/linuxbrew/.linuxbrew/bin/whisper-cli",
         "whisper-cli",
+        os.path.expanduser("~/.local/share/plasma-bonsai/bin/whisper"),
         "/home/linuxbrew/.linuxbrew/bin/whisper",
         "whisper"
     ])
@@ -501,9 +503,24 @@ def transcribe_audio():
             model_path = os.path.expanduser("~/.local/share/plasma-bonsai/models/ggml-base.bin")
             if not os.path.exists(model_path):
                 model_path = os.path.expanduser("~/.local/share/plasma-bonsai/models/ggml-tiny.bin")
+            if not os.path.exists(model_path):
+                return {"success": False, "error": "Modelo de voz (ggml-tiny.bin) no encontrado"}
+
             out_base = "/tmp/bonsai_transcription"
             out_txt = out_base + ".txt"
-            cmd = [whisper_bin, "-m", model_path, "-f", REC_WAV_FILE, "-l", "es", "--output-txt", "-of", out_base, "--no-timestamps"]
+            cmd = [
+                whisper_bin,
+                "-m", model_path,
+                "-f", REC_WAV_FILE,
+                "-l", "es",
+                "-nt",
+                "-np",
+                "-nf",
+                "-bs", "1",
+                "-bo", "1",
+                "--output-txt",
+                "-of", out_base
+            ]
             subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             text = ""
             if os.path.exists(out_txt):
@@ -575,7 +592,9 @@ def speak_text(text):
 def get_voice_status():
     whisper_bin = get_bin([
         os.path.expanduser("~/.local/share/plasma-bonsai/bin/whisper-cli"),
+        "/home/linuxbrew/.linuxbrew/bin/whisper-cli",
         "whisper-cli",
+        os.path.expanduser("~/.local/share/plasma-bonsai/bin/whisper"),
         "/home/linuxbrew/.linuxbrew/bin/whisper",
         "whisper"
     ])
