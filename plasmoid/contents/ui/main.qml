@@ -30,6 +30,10 @@ Item {
         id: chatModel
     }
 
+    ListModel {
+        id: modelComboModel
+    }
+
     // Representación compacta (icono para paneles)
     Plasmoid.compactRepresentation: MouseArea {
         id: compactArea
@@ -79,8 +83,14 @@ Item {
                     id: modelCombo
                     visible: root.daemonConnected && modelComboModel.count > 0
                     Layout.fillWidth: true
-                    model: ListModel { id: modelComboModel }
+                    model: modelComboModel
                     textRole: "text"
+                    currentIndex: {
+                        for (var i = 0; i < modelComboModel.count; i++) {
+                            if (modelComboModel.get(i).text === root.currentModel) return i;
+                        }
+                        return 0;
+                    }
                     onActivated: {
                         var selected = modelComboModel.get(index).text
                         root.switchModel(selected)
@@ -195,7 +205,9 @@ Item {
 
                         ColumnLayout {
                             id: welcomeCol
-                            anchors.fill: parent
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
                             anchors.margins: 10
                             spacing: 6
 
@@ -250,7 +262,9 @@ Item {
 
                         Column {
                             id: innerCol
-                            anchors.fill: parent
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
                             anchors.margins: 9
                             spacing: 4
 
@@ -423,14 +437,9 @@ Item {
                         if (d.models && d.models.length > 0) {
                             if (modelComboModel.count !== d.models.length) {
                                 modelComboModel.clear()
-                                var targetIdx = 0
                                 for (var i = 0; i < d.models.length; i++) {
                                     modelComboModel.append({"text": d.models[i]})
-                                    if (d.models[i] === d.current_model) {
-                                        targetIdx = i
-                                    }
                                 }
-                                modelCombo.currentIndex = targetIdx
                             }
                         } else {
                             modelComboModel.clear()
