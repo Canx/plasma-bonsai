@@ -1,27 +1,32 @@
 # Plasma Bonsai Assistant 🌿
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![KDE Plasma](https://img.shields.io/badge/KDE%20Plasma-5.27%20%7C%206-blue)](https://kde.org/plasma-desktop/)
+[![KDE Plasma](https://img.shields.io/badge/KDE%20Plasma-6-blue)](https://kde.org/plasma-desktop/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local%20AI-orange)](https://ollama.com/)
 
-**Plasma Bonsai Assistant** es un widget (*Plasmoid*) nativo para el entorno de escritorio **KDE Plasma** que integra modelos de lenguaje locales ejecutados en **Ollama** (como `bonsai-2`, `qwen3.8`, `gemma4`) con las capacidades del sistema a través de **D-Bus** y visión multimodal del escritorio.
+**Plasma Bonsai Assistant** es un widget (*Plasmoid*) nativo para el entorno de escritorio **KDE Plasma 6** que integra modelos de lenguaje locales ejecutados en **Ollama** (como `bonsai-2`, `qwen2.5`, `llama3.1`, `gemma4`) directamente en tu panel o escritorio, con capacidades de **visión multimodal** y **control del sistema**.
+
+Funciona **100% en espacio de usuario**: no requiere demonios permanentes en segundo plano, puertos intermedios abiertos ni permisos de administrador.
 
 ---
 
 ## ✨ Características Principales
 
-* 🔒 **100% Privado y Local:** Funciona contra tu servidor Ollama local en `localhost:11434`. Cero telemetría externa.
-* ⚡ **Integración Nativa con KDE:** Plasmoid escrito en QML / Kirigami, listo para anclarse a cualquier panel de Plasma o flotar en el escritorio.
-* 🛠️ **Tool Calling por D-Bus:** El modelo puede ejecutar acciones reales en tu sesión de KDE mediante llamadas a funciones:
-  * **Abrir aplicaciones:** Lanzamiento de apps nativas (`launch_application`: Terminal/Konsole, Kate, Navegador, Dolphin, etc.).
-  * **Organizar ventanas:** Control de ventanas (`manage_windows`: mosaico 50/50 `tile_split`, mostrar escritorio, cascada, desenredo, minimizar o cerrar).
-  * **Fondo de pantalla:** Cambio dinámico mediante el motor de script de Plasma (`change_wallpaper`).
+* 🔒 **100% Privado y Local:** Se conecta directamente a tu servidor Ollama local en `http://localhost:11434`. Cero telemetría externa.
+* ⚡ **Arquitectura Standalone (Sin demonio residente):** Funciona directamente desde el Plasmoid de KDE. No consume memoria en segundo plano cuando no se está utilizando.
+* 🎨 **UI Nativa en Qt6 / Kirigami:**
+  * Respuestas en tiempo real con **streaming de tokens**.
+  * Renderizado enriquecido de **Markdown** (negritas, cursivas, listas, código).
+  * Botón para **copiar respuestas al portapapeles** con un solo clic.
+  * Selector desplegable para cambiar de modelo al vuelo.
+* 📸 **Visión Multimodal del Escritorio:** Captura instantánea de pantalla con Spectacle para analizar ventanas, código o errores visuales con modelos con soporte de visión.
+* 🛠️ **Acciones del Sistema (Tool Calling):**
   * **Brillo de pantalla:** Consulta y ajuste porcentual a través de `org.kde.Solid.PowerManagement`.
-  * **Audio del sistema:** Consulta, ajuste de volumen y mute usando PulseAudio / PipeWire.
-  * **Bloqueo de sesión:** Bloqueo seguro inmediato vía `org.freedesktop.ScreenSaver`.
-  * **Notificaciones del escritorio:** Avisos nativos mediante `notify-send`.
-* 📸 **Visión Multimodal del Escritorio:** Captura instantánea de pantalla o ventana activa con Spectacle para analizar errores visuales, código o interfaces con modelos multimodales.
-* 🔄 **Demonio de Usuario Systemd:** Servicio ligero en segundo plano en Python que no congela la interfaz de Plasma durante la inferencia.
+  * **Audio del sistema:** Consulta, ajuste de volumen y silencio mediante PulseAudio / PipeWire.
+  * **Fondo de pantalla:** Cambio dinámico del wallpaper de Plasma según temática o archivo.
+  * **Abrir aplicaciones:** Lanzamiento de apps (`terminal/konsole`, `kate`, `firefox`, `dolphin`, etc.).
+  * **Gestión de ventanas:** Vista general de ventanas (*overview*), mostrar escritorio y mosaico 50/50.
+  * **Seguridad y avisos:** Bloqueo inmediato de sesión y notificaciones nativas del escritorio.
 
 ---
 
@@ -29,16 +34,16 @@
 
 ```mermaid
 flowchart TD
-    User["👤 Usuario (Atajo / Panel)"] --> QML["🖥️ Plasmoid QML (KDE Plasma)"]
-    QML -->|HTTP REST / JSON| Daemon["🐍 Daemon Python (127.0.0.1:11435)"]
-    Daemon <-->|API Chat + Tools| Ollama["🦙 Ollama Server (bonsai-2)"]
-    Daemon -->|D-Bus / Subprocess| System["⚙️ Servicios KDE / Linux"]
+    User["👤 Usuario (Panel / Atajo de teclado)"] --> QML["🖥️ Plasmoid Nativo Qt6 (KDE Plasma 6)"]
+    QML -->|Streaming HTTP Directo| Ollama["🦙 Ollama Server (localhost:11434)"]
+    QML -.->|Herramientas bajo demanda| Tools["⚙️ Runner de Acciones del Sistema"]
     
-    subgraph System["Acciones del Sistema"]
+    subgraph Tools["Acciones del Sistema"]
         Solid["🔆 Solid PowerManagement (Brillo)"]
-        Audio["🔊 PulseAudio / PipeWire (Volumen)"]
-        Screenshots["📸 Spectacle (Captura de pantalla)"]
-        Notif["🔔 Notificaciones de Plasma"]
+        Audio["🔊 Audio PipeWire / PulseAudio (Volumen)"]
+        Spectacle["📸 Spectacle (Captura de pantalla)"]
+        PlasmaShell["🖼️ PlasmaShell (Fondo de pantalla)"]
+        KWin["🪟 KWin (Ventanas y Atajos)"]
     end
 ```
 
@@ -48,20 +53,16 @@ flowchart TD
 
 ```text
 plasma-bonsai/
-├── plasmoid/                       # Paquete de la extensión KDE Plasma
-│   ├── metadata.json               # Metadatos para Plasma 5 y 6
-│   ├── metadata.desktop            # Compatibilidad adicional Plasma 5
+├── plasmoid/                       # Paquete de la extensión KDE Plasma 6
+│   ├── metadata.json               # Metadatos para Plasma 6 (X-Plasma-API-Minimum-Version: 6.0)
 │   └── contents/
-│       └── ui/
-│           └── main.qml            # Interfaz gráfica en QML / Kirigami
-├── daemon/                         # Demonio backend en Python
-│   ├── server.py                   # Servidor HTTP local con gestión de chat y tools
-│   ├── tools.py                    # Implementación de herramientas D-Bus y sistema
-│   └── plasma-bonsai.service       # Unidad de servicio systemd de usuario
+│       ├── ui/
+│       │   └── main.qml            # Interfaz gráfica en PlasmoidItem / Kirigami
+│       └── code/
+│           └── tools.py            # Runner de herramientas del sistema (Python estándar + D-Bus)
 ├── scripts/
-│   ├── install.sh                  # Script de instalación y registro del plasmoid
-│   └── run-dev.sh                  # Entorno de pruebas con plasmawindowed
-├── especificaci_n_t_cnica...md    # Especificación técnica base
+│   ├── install.sh                  # Instalación local con kpackagetool6
+│   └── run-dev.sh                  # Entorno de pruebas aislado con plasmawindowed
 ├── README.md                       # Documentación principal
 └── LICENSE                         # Licencia MIT
 ```
@@ -70,53 +71,45 @@ plasma-bonsai/
 
 ## 🚀 Requisitos Previos
 
-1. **KDE Plasma 5.27+** o **Plasma 6**.
-2. **Python 3.10+** con librerías `python3-dbus` y `python3-requests`.
-3. **Ollama:** Ejecutándose localmente en `localhost:11434`.
-   * Si no tienes Ollama instalado:
+1. **KDE Plasma 6**
+2. **Python 3** (incluido por defecto en cualquier distribución Linux moderna)
+3. **Ollama:** Ejecutándose en `localhost:11434`
+   * Si aún no tienes Ollama instalado:
      ```bash
      curl -fsSL https://ollama.ai/install.sh | sh
      ```
-   * Puedes usar cualquier modelo que prefieras. Si no tienes `bonsai-2`, puedes descargar modelos como Qwen 2.5, Llama 3.1 o Gemma:
+   * Puedes descargar cualquier modelo con soporte de chat o visión:
      ```bash
-     ollama run bonsai-2:latest
-     # o alternativas populares:
+     ollama pull bonsai-2:latest
+     # Alternativas recomendadas:
      ollama pull qwen2.5:7b
      ollama pull llama3.1:8b
      ```
 
 ---
 
-## 🎛️ Selección y Configuración de Modelos
-
-El asistente no está atado a un único modelo:
-* **Detección y Fallback Automático:** Al iniciar, el demonio detecta todos los modelos instalados en tu Ollama. Si no encuentra `bonsai-2`, selecciona automáticamente el primer modelo disponible.
-* **Selector en Vivo en el Widget:** En la barra superior del Plasmoid encontrarás un menú desplegable con todos los modelos instalados en tu Ollama (`bonsai-2`, `qwen`, `gemma`, `llama`, etc.). Puedes cambiar de modelo en cualquier momento con un clic.
-* **Configuración Persistente:** Tu modelo preferido se guarda automáticamente en `~/.config/plasma-bonsai/config.json`.
-* **Alertas Inteligentes:** Si Ollama está detenido o no hay modelos descargados, el widget te mostrará un aviso explicativo con el comando exacto para solucionarlo.
-
----
-
 ## 📦 Instalación
 
-Ejecuta el script de instalación automática:
+### Desde el repositorio local
+Ejecuta el script de instalación:
 
 ```bash
 cd plasma-bonsai
 ./scripts/install.sh
 ```
 
-El script se encarga de:
-1. Instalar el Plasmoid en tu directorio local (`~/.local/share/plasma/plasmoids/org.kde.plasma.bonsai`).
-2. Configurar y habilitar el servicio de usuario en Systemd (`plasma-bonsai.service`).
+El script registra el plasmoid en tu usuario con `kpackagetool6` (`~/.local/share/plasma/plasmoids/org.kde.plasma.bonsai`).
 
-Una vez instalado, haz clic derecho en tu panel de KDE, selecciona **Añadir elementos gráficos...** y busca **Plasma Bonsai Assistant**.
+### Añadir el widget al escritorio
+1. Haz clic derecho en tu panel de KDE o en el escritorio.
+2. Selecciona **Añadir elementos gráficos…** (o presiona `Meta + W`).
+3. Busca **Plasma Bonsai Assistant** y arrástralo a tu barra de tareas.
 
 ---
 
 ## 🧪 Pruebas en Modo Desarrollo
 
-Para probar el widget en una ventana aislada sin alterar tus paneles actuales:
+Para probar el widget en una ventana flotante de desarrollo sin alterar tus paneles:
 
 ```bash
 ./scripts/run-dev.sh
@@ -126,22 +119,21 @@ Para probar el widget en una ventana aislada sin alterar tus paneles actuales:
 
 ## 🛠️ Ejemplos de Interacción
 
-* **Abrir aplicaciones:** *"Abre la terminal"*, *"Abre el editor de texto"* o *"Abre el navegador"*
-* **Organizar ventanas:** *"Organiza las ventanas en mosaico"* (dividir 50/50), *"Muestra el escritorio"* o *"Pon las ventanas en cascada"*
-* **Cambiar fondo de pantalla:** *"Cambia el fondo de pantalla por uno del espacio"* o *"Ponme un fondo oscuro"*
 * **Ajustar brillo:** *"Baja el brillo de la pantalla al 30%"*
-* **Controlar volumen:** *"Pon el volumen al 50%"* o *"Silencia el sonido"*
-* **Analizar la pantalla:** Pulsa el icono de la cámara 📸 y escribe *"¿Qué error se ve en la pantalla?"*
-* **Bloquear sesión:** *"Bloquea el escritorio"*
+* **Controlar volumen:** *"Pon el volumen al 50%"* o *"Silencia el audio"*
+* **Cambiar fondo:** *"Pon un fondo de pantalla oscuro"* o *"Cambia el fondo a uno de montaña"*
+* **Abrir aplicaciones:** *"Abre la terminal"*, *"Abre Kate"* o *"Abre el navegador"*
+* **Gestión de ventanas:** *"Muestra el escritorio"* o *"Pon la ventana en mosaico"*
+* **Analizar la pantalla:** Pulsa el icono de la cámara 📸 y escribe *"¿Qué error se ve en esta pantalla?"*
+* **Bloquear escritorio:** *"Bloquea la sesión"*
 
 ---
 
 ## 🔒 Seguridad y Privacidad
 
-* **100% Offline y Privado:** Todo el procesamiento del LLM se ejecuta en local mediante Ollama en `localhost:11434`. Ningún dato, texto ni captura de pantalla sale de tu ordenador.
-* **Aislamiento en Localhost:** El demonio backend en Python escucha exclusivamente en la interfaz de bucle invertido (`127.0.0.1:11435`), sin exposición a la red local ni a internet.
-* **Privilegios de Usuario:** El servicio corre como servicio de usuario en systemd (`systemctl --user`), sin necesidad de privilegios `root` o `sudo`.
-* **Herramientas acotadas por lista blanca:** El LLM no tiene acceso a ejecución arbitraria de comandos (`bash` o `eval`). Solo puede invocar las funciones explícitamente declaradas en su esquema (brillo, volumen, fondo, captura, bloqueo y notificación).
+* **100% Offline y Privado:** Todo el procesamiento del modelo de lenguaje se realiza en tu equipo. Ninguna información, texto ni imagen sale a internet.
+* **Sin demonios residentes ni puertos adicionales:** El widget no abre puertos de red ni deja procesos permanentemente en ejecución.
+* **Privilegios estándar:** No se requieren permisos de administrador (`root` o `sudo`).
 
 ---
 

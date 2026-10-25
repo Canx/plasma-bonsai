@@ -4,22 +4,56 @@ import QtQuick.Controls
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasmoid
 import org.kde.plasma.components as PlasmaComponents
+import org.kde.plasma.plasma5support as Plasma5Support
 import org.kde.kirigami as Kirigami
 
 PlasmoidItem {
     id: root
 
     Plasmoid.icon: "preferences-system-network-sharing"
-    Plasmoid.title: "Bonsai AI Assistant"
+    Plasmoid.title: "Plasma Bonsai Assistant"
 
-    property string daemonUrl: "http://127.0.0.1:11435"
+    // Configuración directa a Ollama (sin demonio)
+    property string ollamaUrl: "http://127.0.0.1:11434"
+    property bool ollamaConnected: false
     property bool isBusy: false
-    property bool daemonConnected: false
     property string capturedImageB64: ""
-    property bool ollamaInstalled: true
-    property bool ollamaRunning: true
     property var availableModels: []
     property string currentModel: ""
+    property var toolDefinitions: []
+    property var conversationHistory: []
+
+    // Gestor de llamadas asíncronas a CLI / herramientas
+    property var commandCallbacks: ({})
+    property int cmdCounter: 0
+
+    readonly property string toolsScriptPath: {
+        var url = Qt.resolvedUrl("../code/tools.py").toString()
+        return url.replace(/^file:\/\//, "")
+    }
+
+    Plasma5Support.DataSource {
+        id: executable
+        engine: "executable"
+        connectedSources: []
+        onNewData: (sourceName, data) => {
+            if (root.commandCallbacks[sourceName]) {
+                var cb = root.commandCallbacks[sourceName]
+                delete root.commandCallbacks[sourceName]
+                cb(data["exit code"], data["stdout"] || "", data["stderr"] || "")
+            }
+            disconnectSource(sourceName)
+        }
+    }
+
+    function runCli(cmd, callback) {
+        root.cmdCounter++
+        var uniqueCmd = cmd + " # " + root.cmdCounter
+        if (callback) {
+            root.commandCallbacks[uniqueCmd] = callback
+        }
+        executable.connectSource(uniqueCmd)
+    }
 
     ListModel {
         id: chatModel
@@ -29,7 +63,7 @@ PlasmoidItem {
         id: modelComboModel
     }
 
-    // Representación compacta (icono para paneles)
+    // Representación compacta (icono para panel)
     compactRepresentation: MouseArea {
         id: compactArea
         hoverEnabled: true
@@ -44,7 +78,7 @@ PlasmoidItem {
         }
     }
 
-    // Representación completa (ventana flotante o widget en escritorio)
+    // Representación completa (ventana emergente o widget de escritorio)
     fullRepresentation: Item {
         id: fullRepItem
         Layout.minimumWidth: Kirigami.Units.gridUnit * 22
@@ -57,7 +91,7 @@ PlasmoidItem {
             anchors.margins: Kirigami.Units.smallSpacing
             spacing: Kirigami.Units.smallSpacing
 
-            // Cabecera superior
+            // Cabecera
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Kirigami.Units.smallSpacing
@@ -73,10 +107,11 @@ PlasmoidItem {
                     font.bold: true
                 }
 
-                // Selector de modelo
+                // Selector de modelo Ollama
                 PlasmaComponents.ComboBox {
                     id: modelCombo
-                    visible: root.daemonConnected && modelComboModel.count > 0
+                    visible: root.ollamaConnected && modelComboModel.count > 0
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 9
                     Layout.fillWidth: true
                     model: modelComboModel
                     textRole: "text"
@@ -87,53 +122,60 @@ PlasmoidItem {
                         return 0;
                     }
                     onActivated: {
-                        var selected = modelComboModel.get(index).text
-                        root.switchModel(selected)
+                        root.currentModel = modelComboModel.get(index).text
                     }
                 }
 
+                // Indicador de estado de conexión con Ollama
                 Rectangle {
                     width: Kirigami.Units.gridUnit * 0.5
                     height: width
                     radius: width / 2
-                    color: !root.daemonConnected ? "#e74c3c" : (!root.ollamaRunning ? "#e67e22" : "#27ae60")
+                    color: root.ollamaConnected ? "#27ae60" : "#e74c3c"
                     Layout.alignment: Qt.AlignVCenter
+                    ToolTip.text: root.ollamaConnected ? i18n("Connected to Ollama (127.0.0.1:11434)") : i18n("Ollama not reachable")
+                    ToolTip.visible: statusMouse.containsMouse
+
+                    MouseArea {
+                        id: statusMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: root.checkOllamaHealth()
+                    }
                 }
 
                 PlasmaComponents.ToolButton {
                     icon.name: "edit-clear-all"
-                    text: "Limpiar"
+                    text: i18n("Clear")
                     display: PlasmaComponents.AbstractButton.IconOnly
-                    ToolTip.text: "Limpiar conversación"
+                    ToolTip.text: i18n("Clear conversation")
                     ToolTip.visible: hovered
                     onClicked: root.clearChat()
                 }
             }
 
-            // Banner de aviso si Ollama está detenido, no instalado o sin modelos
+            // Banner informativo si Ollama está detenido o sin modelos
             Rectangle {
-                visible: root.daemonConnected && (!root.ollamaRunning || !root.ollamaInstalled || root.availableModels.length === 0)
+                visible: !root.ollamaConnected || (root.ollamaConnected && root.availableModels.length === 0)
                 Layout.fillWidth: true
-                implicitHeight: warningCol.implicitHeight + 12
+                implicitHeight: warningCol.implicitHeight + 14
                 radius: 4
-                color: "#d35400"
+                color: !root.ollamaConnected ? "#c0392b" : "#d35400"
 
                 ColumnLayout {
                     id: warningCol
                     anchors.fill: parent
-                    anchors.margins: 6
-                    spacing: 2
+                    anchors.margins: 7
+                    spacing: 3
 
                     PlasmaComponents.Label {
                         Layout.fillWidth: true
                         font.bold: true
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
                         color: "#ffffff"
-                        text: !root.ollamaInstalled 
-                              ? "⚠️ Ollama no está instalado en el sistema."
-                              : (!root.ollamaRunning 
-                                 ? "⚠️ Ollama no está en ejecución (localhost:11434)."
-                                 : "⚠️ No hay modelos descargados en Ollama.")
+                        text: !root.ollamaConnected 
+                              ? i18n("⚠️ Ollama is not running on localhost:11434")
+                              : i18n("⚠️ No models downloaded in Ollama")
                     }
 
                     PlasmaComponents.Label {
@@ -141,11 +183,9 @@ PlasmoidItem {
                         font.pointSize: Kirigami.Theme.smallFont.pointSize * 0.9
                         color: "#ffffff"
                         wrapMode: Text.Wrap
-                        text: !root.ollamaInstalled 
-                              ? "Visita ollama.com o ejecuta 'curl -fsSL https://ollama.ai/install.sh | sh'"
-                              : (!root.ollamaRunning 
-                                 ? "Inícialo abriendo un terminal y ejecutando: 'ollama serve'"
-                                 : "Descarga uno ejecutando: 'ollama pull qwen2.5' o 'ollama pull llama3.1'")
+                        text: !root.ollamaConnected 
+                              ? i18n("Start it by running 'ollama serve' in a terminal.")
+                              : i18n("Download a model: 'ollama pull bonsai-2' or 'ollama pull qwen2.5'")
                     }
                 }
             }
@@ -154,10 +194,10 @@ PlasmoidItem {
                 Layout.fillWidth: true
                 height: 1
                 color: Kirigami.Theme.disabledTextColor
-                opacity: 0.3
+                opacity: 0.25
             }
 
-            // Vista de mensajes
+            // Lista de mensajes del chat
             ListView {
                 id: chatListView
                 Layout.fillWidth: true
@@ -184,7 +224,7 @@ PlasmoidItem {
                     readonly property bool isWelcome: model.role === "welcome"
                     readonly property bool isUser: model.role === "user"
 
-                    // Tarjeta de Bienvenida centrada
+                    // Tarjeta de bienvenida inicial
                     Rectangle {
                         id: welcomeCard
                         visible: bubbleDelegate.isWelcome
@@ -217,7 +257,7 @@ PlasmoidItem {
                                 }
 
                                 PlasmaComponents.Label {
-                                    text: "Bonsai Assistant"
+                                    text: "Plasma Bonsai Assistant"
                                     font.bold: true
                                     color: "#27ae60"
                                 }
@@ -228,14 +268,14 @@ PlasmoidItem {
                                 text: model.text
                                 wrapMode: Text.Wrap
                                 horizontalAlignment: Text.AlignHCenter
-                                textFormat: Text.PlainText
+                                textFormat: Text.MarkdownText
                                 opacity: 0.9
                                 color: Kirigami.Theme.textColor
                             }
                         }
                     }
 
-                    // Burbujas de conversación normales
+                    // Burbujas de mensajes normales
                     Rectangle {
                         id: bubbleBox
                         visible: !bubbleDelegate.isWelcome && (model.text !== "" || (model.toolInfo && model.toolInfo !== ""))
@@ -243,10 +283,10 @@ PlasmoidItem {
                         anchors.topMargin: 4
                         anchors.left: bubbleDelegate.isUser ? undefined : parent.left
                         anchors.right: bubbleDelegate.isUser ? parent.right : undefined
-                        anchors.leftMargin: 10
-                        anchors.rightMargin: 10
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
 
-                        width: Math.min(bubbleDelegate.width * 0.90, 500)
+                        width: Math.min(bubbleDelegate.width * 0.90, 520)
                         height: innerCol.implicitHeight + 18
                         radius: 8
                         color: bubbleDelegate.isUser 
@@ -261,41 +301,64 @@ PlasmoidItem {
                             anchors.right: parent.right
                             anchors.top: parent.top
                             anchors.margins: 9
-                            spacing: 4
+                            spacing: 5
 
-                            PlasmaComponents.Label {
-                                text: bubbleDelegate.isUser ? "Tú" : "Bonsai"
-                                font.bold: true
-                                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                                color: bubbleDelegate.isUser ? Kirigami.Theme.highlightedTextColor : "#27ae60"
+                            RowLayout {
+                                width: parent.width
+
+                                PlasmaComponents.Label {
+                                    text: bubbleDelegate.isUser ? i18n("You") : "Bonsai"
+                                    font.bold: true
+                                    font.pointSize: Kirigami.Theme.smallFont.pointSize
+                                    color: bubbleDelegate.isUser ? Kirigami.Theme.highlightedTextColor : "#27ae60"
+                                }
+
+                                Item { Layout.fillWidth: true }
+
+                                // Botón para copiar respuesta
+                                PlasmaComponents.ToolButton {
+                                    visible: !bubbleDelegate.isUser && model.text !== ""
+                                    icon.name: "edit-copy"
+                                    display: PlasmaComponents.AbstractButton.IconOnly
+                                    Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                                    Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                                    ToolTip.text: i18n("Copy response to clipboard")
+                                    ToolTip.visible: hovered
+                                    onClicked: root.copyToClipboard(model.text)
+                                }
                             }
 
+                            // Mensaje con soporte para Markdown enriquecido
                             PlasmaComponents.Label {
                                 id: msgLabel
                                 width: parent.width
                                 text: model.text
                                 wrapMode: Text.Wrap
-                                textFormat: Text.PlainText
+                                textFormat: Text.MarkdownText
                                 color: bubbleDelegate.isUser 
                                        ? Kirigami.Theme.highlightedTextColor 
                                        : Kirigami.Theme.textColor
+                                onLinkActivated: (link) => Qt.openUrlExternally(link)
                             }
 
+                            // Indicador de herramienta ejecutada
                             Rectangle {
                                 visible: model.toolInfo && model.toolInfo !== ""
-                                width: toolLabel.implicitWidth + 12
-                                height: toolLabel.implicitHeight + 4
+                                width: Math.min(toolLabel.implicitWidth + 14, parent.width)
+                                height: toolLabel.implicitHeight + 6
                                 radius: 4
                                 color: Kirigami.Theme.backgroundColor
-                                border.color: Kirigami.Theme.highlightColor
+                                border.color: "#27ae60"
                                 border.width: 1
 
                                 PlasmaComponents.Label {
                                     id: toolLabel
                                     anchors.centerIn: parent
+                                    width: parent.width - 10
+                                    elide: Text.ElideRight
                                     text: "🔧 " + (model.toolInfo || "")
                                     font.pointSize: Kirigami.Theme.smallFont.pointSize * 0.9
-                                    opacity: 0.9
+                                    color: Kirigami.Theme.textColor
                                 }
                             }
                         }
@@ -318,7 +381,7 @@ PlasmoidItem {
                     PlasmaComponents.Label {
                         id: imgBadge
                         anchors.centerIn: parent
-                        text: "📸 Captura de pantalla lista para analizar"
+                        text: "📸 " + i18n("Screenshot ready for analysis")
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
                         color: Kirigami.Theme.highlightedTextColor
                     }
@@ -331,7 +394,7 @@ PlasmoidItem {
                 }
             }
 
-            // Indicador de actividad
+            // Indicador de inferencia en curso
             RowLayout {
                 visible: root.isBusy
                 Layout.fillWidth: true
@@ -344,20 +407,20 @@ PlasmoidItem {
                 }
 
                 PlasmaComponents.Label {
-                    text: "Bonsai está procesando..."
+                    text: i18n("Bonsai is thinking…")
                     font.italic: true
-                    opacity: 0.7
+                    opacity: 0.75
                 }
             }
 
-            // Caja inferior de entrada
+            // Barra inferior de entrada
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Kirigami.Units.smallSpacing
 
                 PlasmaComponents.ToolButton {
                     icon.name: "camera-photo"
-                    ToolTip.text: "Capturar pantalla para analizar"
+                    ToolTip.text: i18n("Capture screenshot to analyze")
                     ToolTip.visible: hovered
                     enabled: !root.isBusy
                     onClicked: root.requestScreenshot()
@@ -366,7 +429,7 @@ PlasmoidItem {
                 PlasmaComponents.TextField {
                     id: promptInput
                     Layout.fillWidth: true
-                    placeholderText: "Pregunta o pide una acción a Bonsai..."
+                    placeholderText: i18n("Ask or request an action from Bonsai…")
                     enabled: !root.isBusy
                     onAccepted: {
                         var val = promptInput.text.trim()
@@ -380,7 +443,7 @@ PlasmoidItem {
                 PlasmaComponents.Button {
                     id: sendBtn
                     icon.name: "document-send"
-                    text: "Enviar"
+                    text: i18n("Send")
                     enabled: !root.isBusy && (promptInput.text.length > 0 || root.capturedImageB64 !== "")
                     onClicked: {
                         var val = promptInput.text.trim()
@@ -394,98 +457,112 @@ PlasmoidItem {
         }
     }
 
-    // Temporizador para comprobar la conexión con el demonio
+    // Comprobación periódica de Ollama
     Timer {
         id: healthCheckTimer
-        interval: 3000
+        interval: 4000
         repeat: true
         running: true
         triggeredOnStart: true
-        onTriggered: root.checkDaemonHealth()
+        onTriggered: root.checkOllamaHealth()
     }
 
     Component.onCompleted: {
         chatModel.append({
             "role": "welcome",
-            "text": "¡Hola! Soy Bonsai, tu asistente local en KDE Plasma. Puedo ayudarte con tareas, responder preguntas o controlar funciones de tu escritorio (brillo, volumen, capturas, notificaciones).",
+            "text": i18n("Hello! I am Bonsai, your native local assistant for KDE Plasma. I can answer questions, analyze screenshots, or control desktop settings (brightness, volume, notifications, windows) completely offline via Ollama."),
             "toolInfo": ""
+        })
+
+        // Cargar esquema de herramientas del sistema
+        root.loadToolSchema()
+    }
+
+    function copyToClipboard(text) {
+        if (!text) return
+        var safe = text.replace(/'/g, "'\\''")
+        root.runCli("printf '%s' '" + safe + "' | wl-copy 2>/dev/null || printf '%s' '" + safe + "' | xclip -selection clipboard 2>/dev/null", null)
+    }
+
+    function loadToolSchema() {
+        root.runCli("python3 '" + root.toolsScriptPath + "' schema", (code, stdout) => {
+            if (code === 0 && stdout.trim() !== "") {
+                try {
+                    root.toolDefinitions = JSON.parse(stdout.trim())
+                } catch (e) {
+                    console.warn("Could not parse tool schema: " + e)
+                }
+            }
         })
     }
 
-    // Funciones hacia el demonio en 127.0.0.1:11435
-    function checkDaemonHealth() {
+    function checkOllamaHealth() {
         var xhr = new XMLHttpRequest()
-        xhr.open("GET", root.daemonUrl + "/models")
-        xhr.timeout = 2500
+        xhr.open("GET", root.ollamaUrl + "/api/tags")
+        xhr.timeout = 3000
         xhr.onreadystatechange = function() {
             if (xhr.readyState === XMLHttpRequest.DONE) {
-                root.daemonConnected = (xhr.status === 200)
+                root.ollamaConnected = (xhr.status === 200)
                 if (xhr.status === 200) {
                     try {
                         var d = JSON.parse(xhr.responseText)
-                        root.ollamaInstalled = d.installed
-                        root.ollamaRunning = d.running
-                        root.currentModel = d.current_model || ""
-                        root.availableModels = d.models || []
+                        var list = d.models || []
+                        var names = []
+                        for (var i = 0; i < list.length; i++) {
+                            names.push(list[i].name)
+                        }
+                        root.availableModels = names
 
-                        // Si la lista de modelos ha cambiado, actualizar el ComboBox
-                        if (d.models && d.models.length > 0) {
-                            if (modelComboModel.count !== d.models.length) {
+                        if (names.length > 0) {
+                            if (modelComboModel.count !== names.length) {
                                 modelComboModel.clear()
-                                for (var i = 0; i < d.models.length; i++) {
-                                    modelComboModel.append({"text": d.models[i]})
+                                for (var j = 0; j < names.length; j++) {
+                                    modelComboModel.append({"text": names[j]})
                                 }
+                            }
+                            if (root.currentModel === "" || names.indexOf(root.currentModel) === -1) {
+                                // Preferir modelos de la familia bonsai o qwen si existen
+                                var preferred = names[0]
+                                for (var k = 0; k < names.length; k++) {
+                                    if (names[k].indexOf("bonsai") !== -1) {
+                                        preferred = names[k]
+                                        break
+                                    }
+                                }
+                                root.currentModel = preferred
                             }
                         } else {
                             modelComboModel.clear()
-                        }
-                    } catch (e) {}
-                }
-            }
-        }
-        xhr.send()
-    }
-
-    function switchModel(modelName) {
-        var xhr = new XMLHttpRequest()
-        xhr.open("POST", root.daemonUrl + "/set_model")
-        xhr.setRequestHeader("Content-Type", "application/json")
-        xhr.send(JSON.stringify({"model": modelName}))
-    }
-
-    function clearChat() {
-        chatModel.clear()
-        chatModel.append({
-            "role": "welcome",
-            "text": "Conversación reiniciada. ¿En qué te puedo ayudar ahora?",
-            "toolInfo": ""
-        })
-        var xhr = new XMLHttpRequest()
-        xhr.open("POST", root.daemonUrl + "/clear")
-        xhr.send()
-    }
-
-    function requestScreenshot() {
-        root.isBusy = true
-        var xhr = new XMLHttpRequest()
-        xhr.open("POST", root.daemonUrl + "/screenshot")
-        xhr.setRequestHeader("Content-Type", "application/json")
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === XMLHttpRequest.DONE) {
-                root.isBusy = false
-                if (xhr.status === 200) {
-                    try {
-                        var res = JSON.parse(xhr.responseText)
-                        if (res.success && res.base64_image) {
-                            root.capturedImageB64 = res.base64_image
+                            root.currentModel = ""
                         }
                     } catch (e) {
-                        console.error("Error al procesar captura: " + e)
+                        console.error("Error parsing Ollama tags: " + e)
                     }
                 }
             }
         }
-        xhr.send(JSON.stringify({"mode": "fullscreen"}))
+        xhr.send()
+    }
+
+    function clearChat() {
+        chatModel.clear()
+        root.conversationHistory = []
+        chatModel.append({
+            "role": "welcome",
+            "text": i18n("Conversation cleared. How can I help you?"),
+            "toolInfo": ""
+        })
+    }
+
+    function requestScreenshot() {
+        root.isBusy = true
+        root.runCli("python3 '" + root.toolsScriptPath + "' screenshot", (code, stdout) => {
+            root.isBusy = false
+            var b64 = (stdout || "").trim()
+            if (b64.length > 100) {
+                root.capturedImageB64 = b64
+            }
+        })
     }
 
     function sendMessage(text) {
@@ -494,17 +571,24 @@ PlasmoidItem {
             return
         }
 
+        var userDisplayText = text !== "" ? text : i18n("[Screenshot attached]")
         chatModel.append({
             "role": "user",
-            "text": text !== "" ? text : "[Captura de pantalla enviada]",
+            "text": userDisplayText,
             "toolInfo": ""
         })
 
-        var imgToSend = root.capturedImageB64
+        var userMessageObj = {
+            "role": "user",
+            "content": text !== "" ? text : "Por favor analiza la captura de pantalla adjunta."
+        }
+        if (root.capturedImageB64 !== "") {
+            userMessageObj["images"] = [root.capturedImageB64]
+        }
+        root.conversationHistory.push(userMessageObj)
         root.capturedImageB64 = ""
         root.isBusy = true
 
-        // Creamos la burbuja del asistente para recibir el stream
         var assistantIndex = chatModel.count
         chatModel.append({
             "role": "assistant",
@@ -512,12 +596,25 @@ PlasmoidItem {
             "toolInfo": ""
         })
 
+        // Preparar payload para Ollama directo
+        var payload = {
+            "model": root.currentModel,
+            "messages": root.conversationHistory,
+            "stream": true
+        }
+
+        // Añadir herramientas si el modelo actual las soporta o si están cargadas
+        if (root.toolDefinitions && root.toolDefinitions.length > 0) {
+            payload["tools"] = root.toolDefinitions
+        }
+
         var xhr = new XMLHttpRequest()
-        xhr.open("POST", root.daemonUrl + "/chat_stream")
+        xhr.open("POST", root.ollamaUrl + "/api/chat")
         xhr.setRequestHeader("Content-Type", "application/json")
         xhr.timeout = 240000
 
         var lastProcessed = 0
+        var accumulatedToolCalls = []
 
         xhr.onreadystatechange = function() {
             if (xhr.readyState === 3 || xhr.readyState === 4) {
@@ -534,20 +631,22 @@ PlasmoidItem {
 
                 for (var i = 0; i < lines.length; i++) {
                     var line = lines[i].trim()
-                    if (line.indexOf("data: ") === 0) {
+                    if (line !== "") {
                         try {
-                            var data = JSON.parse(line.substring(6))
-                            if (data.type === "token" && data.content) {
-                                var curText = chatModel.get(assistantIndex).text
-                                chatModel.setProperty(assistantIndex, "text", curText + data.content)
-                                chatListView.positionViewAtEnd()
-                            } else if (data.type === "tool") {
-                                var msg = data.message || data.name || "Herramienta ejecutada"
-                                var curTools = chatModel.get(assistantIndex).toolInfo
-                                var updated = curTools ? (curTools + ", " + msg) : msg
-                                chatModel.setProperty(assistantIndex, "toolInfo", updated)
-                                chatListView.positionViewAtEnd()
-                            } else if (data.type === "done") {
+                            var data = JSON.parse(line)
+                            if (data.message) {
+                                if (data.message.content) {
+                                    var curText = chatModel.get(assistantIndex).text
+                                    chatModel.setProperty(assistantIndex, "text", curText + data.message.content)
+                                    chatListView.positionViewAtEnd()
+                                }
+                                if (data.message.tool_calls && data.message.tool_calls.length > 0) {
+                                    for (var t = 0; t < data.message.tool_calls.length; t++) {
+                                        accumulatedToolCalls.push(data.message.tool_calls[t])
+                                    }
+                                }
+                            }
+                            if (data.done) {
                                 root.isBusy = false
                             }
                         } catch (e) {}
@@ -557,18 +656,49 @@ PlasmoidItem {
 
             if (xhr.readyState === 4) {
                 root.isBusy = false
-                if (xhr.status !== 200) {
-                    var finalCheck = chatModel.get(assistantIndex).text
-                    if (finalCheck === "") {
-                        chatModel.setProperty(assistantIndex, "text", "Error al comunicarse con el demonio de Bonsai.")
+
+                if (xhr.status === 200) {
+                    var finalAssistantText = chatModel.get(assistantIndex).text
+
+                    // Si hubo llamadas a herramientas, ejecutarlas mediante el runner local
+                    if (accumulatedToolCalls.length > 0) {
+                        for (var tc = 0; tc < accumulatedToolCalls.length; tc++) {
+                            var call = accumulatedToolCalls[tc]
+                            var fnName = call.function.name
+                            var fnArgs = JSON.stringify(call.function.arguments || {})
+                            var safeArgs = fnArgs.replace(/'/g, "'\\''")
+
+                            root.runCli("python3 '" + root.toolsScriptPath + "' call " + fnName + " '" + safeArgs + "'", (code, stdout) => {
+                                try {
+                                    var res = JSON.parse(stdout.trim())
+                                    var info = res.message || (res.success ? i18n("Action executed") : res.error)
+                                    var curTools = chatModel.get(assistantIndex).toolInfo
+                                    var updated = curTools ? (curTools + " • " + info) : info
+                                    chatModel.setProperty(assistantIndex, "toolInfo", updated)
+
+                                    // Si el asistente no dijo nada de texto, poner el mensaje de la herramienta
+                                    if (chatModel.get(assistantIndex).text === "") {
+                                        chatModel.setProperty(assistantIndex, "text", info)
+                                    }
+                                } catch (e) {}
+                            })
+                        }
+                    }
+
+                    // Guardar en el historial para contexto multi-turno
+                    root.conversationHistory.push({
+                        "role": "assistant",
+                        "content": finalAssistantText
+                    })
+                } else {
+                    var errText = chatModel.get(assistantIndex).text
+                    if (errText === "") {
+                        chatModel.setProperty(assistantIndex, "text", i18n("Error communicating with Ollama (%1). Make sure it is running.", xhr.status))
                     }
                 }
             }
         }
 
-        xhr.send(JSON.stringify({
-            "message": text,
-            "image_b64": imgToSend
-        }))
+        xhr.send(JSON.stringify(payload))
     }
 }

@@ -5,9 +5,12 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLASMOID_DIR="$DIR/plasmoid"
 ID="org.kde.plasma.bonsai"
 
-echo "=== Modo Desarrollo: Plasma Bonsai Assistant ==="
+echo "=== Modo Desarrollo: Plasma Bonsai Assistant (Standalone) ==="
 
-# Asegurar que el Plasmoid está instalado en el usuario para testing
+# Asegurar permisos
+chmod +x "$PLASMOID_DIR/contents/code/tools.py" 2>/dev/null || true
+
+# Asegurar herramienta
 if command -v kpackagetool6 &>/dev/null; then
     TOOL="kpackagetool6"
 elif command -v kpackagetool5 &>/dev/null; then
@@ -19,15 +22,12 @@ fi
 
 $TOOL --type Plasma/Applet --upgrade "$PLASMOID_DIR" 2>/dev/null || $TOOL --type Plasma/Applet --install "$PLASMOID_DIR" 2>/dev/null || true
 
-# Comprobar si el demonio ya está corriendo
-if ! curl -s http://127.0.0.1:11435/health &>/dev/null; then
-    echo "Iniciando demonio en segundo plano..."
-    python3 "$DIR/daemon/server.py" &
-    DAEMON_PID=$!
-    trap "kill $DAEMON_PID 2>/dev/null || true" EXIT
-    sleep 1
+# Comprobar si Ollama está corriendo
+if ! curl -s http://127.0.0.1:11434/api/tags &>/dev/null; then
+    echo "⚠️ Aviso: Ollama no parece estar en ejecución en http://127.0.0.1:11434"
+    echo "Puedes iniciarlo con: ollama serve"
 else
-    echo "Demonio ya activo en http://127.0.0.1:11435"
+    echo "✓ Ollama detectado en http://127.0.0.1:11434"
 fi
 
 echo "Abriendo widget en ventana aislada (plasmawindowed)..."
