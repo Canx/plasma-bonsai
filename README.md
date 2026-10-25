@@ -13,6 +13,7 @@
 * 🔒 **100% Privado y Local:** Funciona contra tu servidor Ollama local en `localhost:11434`. Cero telemetría externa.
 * ⚡ **Integración Nativa con KDE:** Plasmoid escrito en QML / Kirigami, listo para anclarse a cualquier panel de Plasma o flotar en el escritorio.
 * 🛠️ **Tool Calling por D-Bus:** El modelo puede ejecutar acciones reales en tu sesión de KDE mediante llamadas a funciones:
+  * **Fondo de pantalla:** Cambio dinámico mediante el motor de script de Plasma (`change_wallpaper`).
   * **Brillo de pantalla:** Consulta y ajuste porcentual a través de `org.kde.Solid.PowerManagement`.
   * **Audio del sistema:** Consulta, ajuste de volumen y mute usando PulseAudio / PipeWire.
   * **Bloqueo de sesión:** Bloqueo seguro inmediato vía `org.freedesktop.ScreenSaver`.
@@ -105,10 +106,20 @@ Para probar el widget en una ventana aislada sin alterar tus paneles actuales:
 
 ## 🛠️ Ejemplos de Interacción
 
+* **Cambiar fondo de pantalla:** *"Cambia el fondo de pantalla por uno del espacio"* o *"Ponme un fondo oscuro"*
 * **Ajustar brillo:** *"Baja el brillo de la pantalla al 30%"*
 * **Controlar volumen:** *"Pon el volumen al 50%"* o *"Silencia el sonido"*
 * **Analizar la pantalla:** Pulsa el icono de la cámara 📸 y escribe *"¿Qué error se ve en la pantalla?"*
 * **Bloquear sesión:** *"Bloquea el escritorio"*
+
+---
+
+## 🔒 Seguridad y Privacidad
+
+* **100% Offline y Privado:** Todo el procesamiento del LLM se ejecuta en local mediante Ollama en `localhost:11434`. Ningún dato, texto ni captura de pantalla sale de tu ordenador.
+* **Aislamiento en Localhost:** El demonio backend en Python escucha exclusivamente en la interfaz de bucle invertido (`127.0.0.1:11435`), sin exposición a la red local ni a internet.
+* **Privilegios de Usuario:** El servicio corre como servicio de usuario en systemd (`systemctl --user`), sin necesidad de privilegios `root` o `sudo`.
+* **Herramientas acotadas por lista blanca:** El LLM no tiene acceso a ejecución arbitraria de comandos (`bash` o `eval`). Solo puede invocar las funciones explícitamente declaradas en su esquema (brillo, volumen, fondo, captura, bloqueo y notificación).
 
 ---
 
