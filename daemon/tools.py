@@ -97,6 +97,73 @@ def take_screenshot(mode="fullscreen"):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+def change_wallpaper(query_or_path):
+    """Cambia el fondo de pantalla de KDE Plasma a un tema o imagen dada"""
+    import glob
+    try:
+        img_path = None
+        # 1. Comprobar si es ruta de archivo existente
+        if os.path.isabs(query_or_path) and os.path.exists(query_or_path):
+            img_path = query_or_path
+        else:
+            query = (query_or_path or "").lower().strip()
+            mapping = {
+                'oscuro': 'DarkestHour',
+                'negro': 'DarkestHour',
+                'noche': 'MilkyWay',
+                'espacio': 'MilkyWay',
+                'estrellas': 'MilkyWay',
+                'otoño': 'Autumn',
+                'frio': 'IceCold',
+                'hielo': 'IceCold',
+                'montaña': 'Altai',
+                'naturaleza': 'PastelHills',
+                'defecto': 'Next',
+                'plasma': 'Next',
+                'azul': 'Flow',
+                'agua': 'BytheWater',
+            }
+            target = mapping.get(query, query)
+            for wp in glob.glob('/usr/share/wallpapers/*'):
+                base = os.path.basename(wp).lower()
+                if target in base:
+                    imgs = glob.glob(f'{wp}/contents/images/*1920x1080*') or glob.glob(f'{wp}/contents/images/*') or glob.glob(f'{wp}/contents/screenshot.*')
+                    if imgs:
+                        img_path = imgs[0]
+                        break
+
+        if not img_path:
+            available = [os.path.basename(w) for w in glob.glob('/usr/share/wallpapers/*') if os.path.isdir(w)]
+            return {
+                "success": False,
+                "error": f"No se encontró el fondo '{query_or_path}'. Disponibles: {', '.join(available[:8])}..."
+            }
+
+        # Aplicar mediante D-Bus en KDE Plasma
+        bus = dbus.SessionBus()
+        proxy = bus.get_object('org.kde.plasmashell', '/PlasmaShell')
+        iface = dbus.Interface(proxy, 'org.kde.PlasmaShell')
+
+        file_url = f"file://{img_path}"
+        script = f"""
+var allDesktops = desktops();
+for (var i = 0; i < allDesktops.length; i++) {{
+    var d = allDesktops[i];
+    d.wallpaperPlugin = "org.kde.image";
+    d.currentConfigGroup = Array("Wallpaper", "org.kde.image", "General");
+    d.writeConfig("Image", "{file_url}");
+}}
+"""
+        iface.evaluateScript(script)
+        theme_name = os.path.basename(os.path.dirname(os.path.dirname(img_path))) if "contents" in img_path else os.path.basename(img_path)
+        return {
+            "success": True,
+            "message": f"Fondo de pantalla cambiado a '{theme_name}'",
+            "path": img_path
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 # Definiciones de herramientas para la API de Ollama
 TOOL_DEFINITIONS = [
     {
@@ -185,6 +252,23 @@ TOOL_DEFINITIONS = [
                 "properties": {}
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "change_wallpaper",
+            "description": "Cambia el fondo de pantalla del escritorio KDE Plasma a un tema o imagen (ejemplos: 'MilkyWay', 'DarkestHour', 'Autumn', 'Next', 'oscuro', 'espacio', 'otoño', 'frio', 'azul' o una ruta local a una imagen).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "theme_or_path": {
+                        "type": "string",
+                        "description": "Nombre del tema o concepto (ej: 'oscuro', 'espacio', 'MilkyWay', 'otoño', 'Next') o ruta completa a un archivo de imagen."
+                    }
+                },
+                "required": ["theme_or_path"]
+            }
+        }
     }
 ]
 
@@ -213,5 +297,8 @@ def execute_tool_call(name, args):
 
     elif name == "lock_screen":
         return lock_screen()
+
+    elif name == "change_wallpaper":
+        return change_wallpaper(args.get("theme_or_path", "Next"))
 
     return {"success": False, "error": f"Herramienta desconocida: {name}"}
