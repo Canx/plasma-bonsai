@@ -124,7 +124,7 @@ Item {
                 delegate: Item {
                     id: bubbleDelegate
                     width: chatListView.width
-                    height: isWelcome ? welcomeCard.height + 12 : bubbleBox.height + 10
+                    height: isWelcome ? (welcomeCard.height + 12) : (bubbleBox.visible ? (bubbleBox.height + 10) : 0)
 
                     readonly property bool isWelcome: model.role === "welcome"
                     readonly property bool isUser: model.role === "user"
@@ -181,7 +181,7 @@ Item {
                     // Burbujas de conversación normales
                     Rectangle {
                         id: bubbleBox
-                        visible: !bubbleDelegate.isWelcome
+                        visible: !bubbleDelegate.isWelcome && (model.text !== "" || (model.toolInfo && model.toolInfo !== ""))
                         anchors.top: parent.top
                         anchors.topMargin: 4
                         anchors.left: bubbleDelegate.isUser ? undefined : parent.left
@@ -417,53 +417,64 @@ Item {
         root.capturedImageB64 = ""
         root.isBusy = true
 
+        // Creamos la burbuja del asistente para recibir el stream
+        var assistantIndex = chatModel.count
+        chatModel.append({
+            "role": "assistant",
+            "text": "",
+            "toolInfo": ""
+        })
+
         var xhr = new XMLHttpRequest()
-        xhr.open("POST", root.daemonUrl + "/chat")
+        xhr.open("POST", root.daemonUrl + "/chat_stream")
         xhr.setRequestHeader("Content-Type", "application/json")
-        xhr.timeout = 180000
+        xhr.timeout = 240000
+
+        var lastProcessed = 0
 
         xhr.onreadystatechange = function() {
-            if (xhr.readyState === XMLHttpRequest.DONE) {
-                root.isBusy = false
-                if (xhr.status === 200) {
-                    try {
-                        var res = JSON.parse(xhr.responseText)
-                        var toolsText = ""
-                        if (res.tools_executed && res.tools_executed.length > 0) {
-                            var tNames = []
-                            for (var i = 0; i < res.tools_executed.length; i++) {
-                                var t = res.tools_executed[i]
-                                var msg = (t.result && t.result.message) ? t.result.message : t.name
-                                tNames.push(msg)
-                            }
-                            toolsText = tNames.join(", ")
-                        }
+            if (xhr.readyState === 3 || xhr.readyState === 4) {
+                var fullResponse = xhr.responseText || ""
+                var unread = fullResponse.substring(lastProcessed)
+                var lines = unread.split("\n")
 
-                        chatModel.append({
-                            "role": "assistant",
-                            "text": res.reply || "(Sin respuesta de texto)",
-                            "toolInfo": toolsText
-                        })
-                    } catch (e) {
-                        chatModel.append({
-                            "role": "assistant",
-                            "text": "Error al procesar la respuesta del asistente.",
-                            "toolInfo": ""
-                        })
-                    }
+                if (xhr.readyState === 3) {
+                    var remaining = lines.pop()
+                    lastProcessed = fullResponse.length - remaining.length
                 } else {
-                    var errText = "Error al comunicarse con el demonio de Bonsai."
-                    try {
-                        var errJson = JSON.parse(xhr.responseText)
-                        if (errJson.error) {
-                            errText = errJson.error
-                        }
-                    } catch (e) {}
-                    chatModel.append({
-                        "role": "assistant",
-                        "text": errText,
-                        "toolInfo": ""
-                    })
+                    lastProcessed = fullResponse.length
+                }
+
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i].trim()
+                    if (line.indexOf("data: ") === 0) {
+                        try {
+                            var data = JSON.parse(line.substring(6))
+                            if (data.type === "token" && data.content) {
+                                var curText = chatModel.get(assistantIndex).text
+                                chatModel.setProperty(assistantIndex, "text", curText + data.content)
+                                chatListView.positionViewAtEnd()
+                            } else if (data.type === "tool") {
+                                var msg = data.message || data.name || "Herramienta ejecutada"
+                                var curTools = chatModel.get(assistantIndex).toolInfo
+                                var updated = curTools ? (curTools + ", " + msg) : msg
+                                chatModel.setProperty(assistantIndex, "toolInfo", updated)
+                                chatListView.positionViewAtEnd()
+                            } else if (data.type === "done") {
+                                root.isBusy = false
+                            }
+                        } catch (e) {}
+                    }
+                }
+            }
+
+            if (xhr.readyState === 4) {
+                root.isBusy = false
+                if (xhr.status !== 200) {
+                    var finalCheck = chatModel.get(assistantIndex).text
+                    if (finalCheck === "") {
+                        chatModel.setProperty(assistantIndex, "text", "Error al comunicarse con el demonio de Bonsai.")
+                    }
                 }
             }
         }

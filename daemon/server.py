@@ -228,6 +228,143 @@ class BonsaiRequestHandler(BaseHTTPRequestHandler):
                 logger.error(f"Error procesando chat: {str(e)}")
                 self._send_json(500, {"error": f"Error interno: {str(e)}"})
 
+        elif self.path == "/chat_stream":
+            user_msg = req_data.get("message", "").strip()
+            image_b64 = req_data.get("image_b64", None)
+            model_to_use = req_data.get("model", DEFAULT_MODEL)
+
+            if not user_msg and not image_b64:
+                self._send_json(400, {"error": "Mensaje vacío"})
+                return
+
+            user_payload = {"role": "user", "content": user_msg}
+            if image_b64:
+                user_payload["images"] = [image_b64]
+
+            conversation_history.append(user_payload)
+
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.end_headers()
+
+            def send_event(obj):
+                try:
+                    payload = f"data: {json.dumps(obj, ensure_ascii=False)}\n\n".encode("utf-8")
+                    self.wfile.write(payload)
+                    self.wfile.flush()
+                except Exception as ex:
+                    logger.warning(f"Error escribiendo en stream cliente: {ex}")
+
+            try:
+                stream_payload = {
+                    "model": model_to_use,
+                    "messages": conversation_history,
+                    "stream": True,
+                    "tools": TOOL_DEFINITIONS
+                }
+                logger.info(f"[Stream] Iniciando consulta a Ollama ({model_to_use})...")
+
+                accumulated_content = ""
+                tool_calls = []
+
+                with requests.post(f"{OLLAMA_URL}/api/chat", json=stream_payload, stream=True, timeout=180) as s_res:
+                    if s_res.status_code != 200:
+                        send_event({"type": "error", "error": f"Error Ollama ({s_res.status_code})"})
+                        send_event({"type": "done"})
+                        return
+
+                    for line in s_res.iter_lines():
+                        if not line:
+                            continue
+                        try:
+                            chunk = json.loads(line.decode("utf-8"))
+                        except Exception:
+                            continue
+
+                        msg = chunk.get("message", {})
+
+                        if "tool_calls" in msg and msg["tool_calls"]:
+                            tool_calls.extend(msg["tool_calls"])
+
+                        thinking_token = msg.get("thinking", "")
+                        if thinking_token:
+                            send_event({"type": "thinking", "content": thinking_token})
+
+                        token = msg.get("content", "")
+                        if token:
+                            accumulated_content += token
+                            send_event({"type": "token", "content": token})
+
+                if tool_calls:
+                    logger.info(f"[Stream] Ejecutando {len(tool_calls)} herramientas...")
+                    conversation_history.append({"role": "assistant", "tool_calls": tool_calls})
+
+                    for tc in tool_calls:
+                        fn = tc.get("function", {})
+                        fn_name = fn.get("name")
+                        fn_args = fn.get("arguments", {})
+                        if isinstance(fn_args, str):
+                            try:
+                                fn_args = json.loads(fn_args)
+                            except:
+                                fn_args = {}
+
+                        tool_result = execute_tool_call(fn_name, fn_args)
+                        t_msg = tool_result.get("message", fn_name) if isinstance(tool_result, dict) else str(tool_result)
+
+                        send_event({
+                            "type": "tool",
+                            "name": fn_name,
+                            "message": t_msg
+                        })
+
+                        conversation_history.append({
+                            "role": "tool",
+                            "content": json.dumps(tool_result, ensure_ascii=False)
+                        })
+
+                    final_payload = {
+                        "model": model_to_use,
+                        "messages": conversation_history,
+                        "stream": True
+                    }
+                    final_content = ""
+                    with requests.post(f"{OLLAMA_URL}/api/chat", json=final_payload, stream=True, timeout=180) as s_final:
+                        for line in s_final.iter_lines():
+                            if not line:
+                                continue
+                            try:
+                                chunk = json.loads(line.decode("utf-8"))
+                            except Exception:
+                                continue
+
+                            token = chunk.get("message", {}).get("content", "")
+                            if token:
+                                final_content += token
+                                send_event({"type": "token", "content": token})
+
+                    conversation_history.append({"role": "assistant", "content": final_content})
+                    send_event({"type": "done"})
+                    self.close_connection = True
+                    return
+
+                if accumulated_content:
+                    conversation_history.append({"role": "assistant", "content": accumulated_content})
+
+                send_event({"type": "done"})
+                self.close_connection = True
+
+            except requests.exceptions.ConnectionError:
+                send_event({"type": "error", "error": "No se puede conectar con Ollama en localhost:11434."})
+                send_event({"type": "done"})
+            except Exception as e:
+                logger.error(f"[Stream] Error inesperado: {str(e)}")
+                send_event({"type": "error", "error": f"Error interno: {str(e)}"})
+                send_event({"type": "done"})
+
         else:
             self._send_json(404, {"error": "Ruta no encontrada"})
 
