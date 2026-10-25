@@ -7,10 +7,12 @@
             }
         ],
         "Category": "Utilities",
-        "Description": "Asistente local inteligente para KDE Plasma integrado con Ollama y herramientas D-Bus",
+        "Description": "Smart local AI assistant for KDE Plasma integrated with Ollama and system tools",
+        "Description[es]": "Asistente local inteligente para KDE Plasma integrado con Ollama y herramientas del sistema",
         "Icon": "preferences-system-network-sharing",
         "Id": "org.kde.plasma.bonsai",
         "Name": "Plasma Bonsai Assistant",
+        "Name[es]": "Asistente Plasma Bonsai",
         "Version": "1.0.0",
         "Website": "https://github.com/Canx/plasma-bonsai"
     },

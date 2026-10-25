@@ -1,0 +1,65 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: es\n"
+
+msgid "Hello! I am Bonsai, your native local assistant for KDE Plasma. I can answer questions, analyze screenshots, or control desktop settings (brightness, volume, notifications, windows) completely offline via Ollama."
+msgstr "¡Hola! Soy Bonsai, tu asistente local nativo para KDE Plasma. Puedo responder preguntas, analizar capturas de pantalla o controlar el escritorio (brillo, volumen, notificaciones, ventanas) completamente en local mediante Ollama."
+
+msgid "Clear"
+msgstr "Limpiar"
+
+msgid "Clear conversation"
+msgstr "Limpiar conversación"
+
+msgid "Conversation cleared. How can I help you?"
+msgstr "Conversación reiniciada. ¿En qué te puedo ayudar?"
+
+msgid "Send"
+msgstr "Enviar"
+
+msgid "You"
+msgstr "Tú"
+
+msgid "Bonsai is thinking…"
+msgstr "Bonsai está pensando…"
+
+msgid "Ask or request an action from Bonsai…"
+msgstr "Pregunta o pide una acción a Bonsai…"
+
+msgid "Capture screenshot to analyze"
+msgstr "Capturar pantalla para analizar"
+
+msgid "Screenshot ready for analysis"
+msgstr "Captura de pantalla lista para analizar"
+
+msgid "[Screenshot attached]"
+msgstr "[Captura de pantalla adjunta]"
+
+msgid "Copy response to clipboard"
+msgstr "Copiar respuesta al portapapeles"
+
+msgid "Connected to Ollama (127.0.0.1:11434)"
+msgstr "Conectado a Ollama (127.0.0.1:11434)"
+
+msgid "Ollama not reachable"
+msgstr "Ollama no accesible"
+
+msgid "⚠️ Ollama is not running on localhost:11434"
+msgstr "⚠️ Ollama no está en ejecución en localhost:11434"
+
+msgid "Start it by running 'ollama serve' in a terminal."
+msgstr "Inícialo ejecutando 'ollama serve' en una terminal."
+
+msgid "⚠️ No models downloaded in Ollama"
+msgstr "⚠️ No hay modelos descargados en Ollama"
+
+msgid "Download a model: 'ollama pull bonsai-2' or 'ollama pull qwen2.5'"
+msgstr "Descarga un modelo: 'ollama pull bonsai-2' o 'ollama pull qwen2.5'"
+
+msgid "Action executed"
+msgstr "Acción ejecutada"
+
+msgid "Error communicating with Ollama (%1). Make sure it is running."
+msgstr "Error al comunicarse con Ollama (%1). Asegúrate de que está en ejecución."
