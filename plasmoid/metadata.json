@@ -1,0 +1,20 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "304053+Canx@users.noreply.github.com",
+                "Name": "Rubén Cancho"
+            }
+        ],
+        "Category": "Utilities",
+        "Description": "Asistente local inteligente para KDE Plasma integrado con Ollama y herramientas D-Bus",
+        "Icon": "preferences-system-network-sharing",
+        "Id": "org.kde.plasma.bonsai",
+        "Name": "Plasma Bonsai Assistant",
+        "Version": "1.0.0",
+        "Website": "https://github.com/Canx/plasma-bonsai"
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API": "declarativeappletscript",
+    "X-Plasma-MainScript": "ui/main.qml"
+}
