@@ -131,6 +131,18 @@ Para probar el widget en una ventana flotante de desarrollo sin alterar tus pane
 
 ---
 
+## 🗺️ Hoja de Ruta y Próximas Funcionalidades
+
+Consulta el archivo [TODO.md](TODO.md) para ver la lista detallada de tareas planificadas, destacando:
+* 🎙️ **Interacción por voz (Speech-to-Text local con Whisper y síntesis de voz TTS)**
+* 🎵 **Control multimedia universal (Spotify, VLC, YouTube vía MPRIS2)**
+* 🌓 **Conmutador de tema oscuro / claro al vuelo**
+* 🔋 **Estado de batería y recursos del sistema (RAM / CPU)**
+* 📋 **Integración con el historial del portapapeles de KDE (Klipper)**
+* 🔎 **Búsqueda rápida de archivos en local (Baloo / fd)**
+
+---
+
 ## 🔒 Seguridad y Privacidad
 
 * **100% Offline y Privado:** Todo el procesamiento del modelo de lenguaje se realiza en tu equipo. Ninguna información, texto ni imagen sale a internet.
