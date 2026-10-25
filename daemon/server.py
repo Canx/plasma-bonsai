@@ -19,12 +19,85 @@ from socketserver import ThreadingMixIn
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from tools import TOOL_DEFINITIONS, execute_tool_call, take_screenshot, get_brightness, get_volume
 
+import shutil
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("plasma-bonsai")
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
-DEFAULT_MODEL = os.environ.get("BONSAI_MODEL", "bonsai-2:latest")
 PORT = int(os.environ.get("BONSAI_PORT", 11435))
+
+# Configuración persistente del modelo
+CONFIG_DIR = os.path.expanduser("~/.config/plasma-bonsai")
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+
+def load_saved_model():
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("model")
+    except Exception as e:
+        logger.warning(f"No se pudo cargar config.json: {e}")
+    return None
+
+def save_model(model_name):
+    try:
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump({"model": model_name}, f, indent=2)
+    except Exception as e:
+        logger.warning(f"No se pudo guardar config.json: {e}")
+
+current_model = os.environ.get("BONSAI_MODEL") or load_saved_model()
+
+def check_ollama_status():
+    """Comprueba si Ollama está instalado, en ejecución y qué modelos tiene"""
+    installed = bool(shutil.which("ollama"))
+    running = False
+    models = []
+    try:
+        r = requests.get(f"{OLLAMA_URL}/api/tags", timeout=3)
+        if r.status_code == 200:
+            running = True
+            models = [m.get("name") for m in r.json().get("models", [])]
+    except Exception:
+        running = False
+
+    return {
+        "installed": installed,
+        "running": running,
+        "models": models
+    }
+
+def get_active_model():
+    """Devuelve el modelo activo con fallback automático inteligente"""
+    global current_model
+    status = check_ollama_status()
+    available = status.get("models", [])
+
+    # 1. Si current_model está en la lista de disponibles, usarlo
+    if current_model and current_model in available:
+        return current_model
+
+    # 2. Preferir bonsai-2 si existe
+    if "bonsai-2:latest" in available or "bonsai-2" in available:
+        current_model = "bonsai-2:latest"
+        return current_model
+
+    # 3. Primer modelo disponible en Ollama
+    if available:
+        current_model = available[0]
+        return current_model
+
+    # 4. Fallback por defecto
+    return current_model or "bonsai-2:latest"
+
+def set_active_model(model_name):
+    global current_model
+    current_model = model_name
+    save_model(model_name)
+    logger.info(f"Modelo activo cambiado a: {current_model}")
 
 def get_user_display_name():
     """Detecta dinámicamente el nombre del usuario del sistema"""
@@ -91,14 +164,28 @@ class BonsaiRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
 
     def do_GET(self):
+        active = get_active_model()
+        ollama_stat = check_ollama_status()
         if self.path == "/health":
-            self._send_json(200, {"status": "ok", "model": DEFAULT_MODEL})
+            self._send_json(200, {
+                "status": "ok",
+                "model": active,
+                "ollama": ollama_stat
+            })
+        elif self.path == "/models":
+            self._send_json(200, {
+                "current_model": active,
+                "installed": ollama_stat["installed"],
+                "running": ollama_stat["running"],
+                "models": ollama_stat["models"]
+            })
         elif self.path == "/status":
             b_info = get_brightness()
             v_info = get_volume()
             self._send_json(200, {
                 "status": "ok",
-                "model": DEFAULT_MODEL,
+                "model": active,
+                "ollama": ollama_stat,
                 "history_length": len(conversation_history),
                 "system": {
                     "brightness": b_info.get("brightness_percent", 50),
@@ -124,6 +211,14 @@ class BonsaiRequestHandler(BaseHTTPRequestHandler):
             conversation_history = [create_system_prompt()]
             self._send_json(200, {"success": True, "message": "Historial reiniciado"})
 
+        elif self.path == "/set_model":
+            m = req_data.get("model")
+            if not m:
+                self._send_json(400, {"error": "Modelo no especificado"})
+                return
+            set_active_model(m)
+            self._send_json(200, {"success": True, "model": m, "message": f"Modelo cambiado a {m}"})
+
         elif self.path == "/screenshot":
             mode = req_data.get("mode", "fullscreen")
             result = take_screenshot(mode=mode)
@@ -132,7 +227,7 @@ class BonsaiRequestHandler(BaseHTTPRequestHandler):
         elif self.path == "/chat":
             user_msg = req_data.get("message", "").strip()
             image_b64 = req_data.get("image_b64", None)
-            model_to_use = req_data.get("model", DEFAULT_MODEL)
+            model_to_use = req_data.get("model") or get_active_model()
 
             if not user_msg and not image_b64:
                 self._send_json(400, {"error": "Mensaje vacío"})
@@ -232,7 +327,7 @@ class BonsaiRequestHandler(BaseHTTPRequestHandler):
         elif self.path == "/chat_stream":
             user_msg = req_data.get("message", "").strip()
             image_b64 = req_data.get("image_b64", None)
-            model_to_use = req_data.get("model", DEFAULT_MODEL)
+            model_to_use = req_data.get("model") or get_active_model()
 
             if not user_msg and not image_b64:
                 self._send_json(400, {"error": "Mensaje vacío"})

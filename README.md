@@ -72,10 +72,28 @@ plasma-bonsai/
 
 1. **KDE Plasma 5.27+** o **Plasma 6**.
 2. **Python 3.10+** con librerías `python3-dbus` y `python3-requests`.
-3. **Ollama** ejecutándose localmente con el modelo `bonsai-2:latest`:
-   ```bash
-   ollama run bonsai-2:latest
-   ```
+3. **Ollama:** Ejecutándose localmente en `localhost:11434`.
+   * Si no tienes Ollama instalado:
+     ```bash
+     curl -fsSL https://ollama.ai/install.sh | sh
+     ```
+   * Puedes usar cualquier modelo que prefieras. Si no tienes `bonsai-2`, puedes descargar modelos como Qwen 2.5, Llama 3.1 o Gemma:
+     ```bash
+     ollama run bonsai-2:latest
+     # o alternativas populares:
+     ollama pull qwen2.5:7b
+     ollama pull llama3.1:8b
+     ```
+
+---
+
+## 🎛️ Selección y Configuración de Modelos
+
+El asistente no está atado a un único modelo:
+* **Detección y Fallback Automático:** Al iniciar, el demonio detecta todos los modelos instalados en tu Ollama. Si no encuentra `bonsai-2`, selecciona automáticamente el primer modelo disponible.
+* **Selector en Vivo en el Widget:** En la barra superior del Plasmoid encontrarás un menú desplegable con todos los modelos instalados en tu Ollama (`bonsai-2`, `qwen`, `gemma`, `llama`, etc.). Puedes cambiar de modelo en cualquier momento con un clic.
+* **Configuración Persistente:** Tu modelo preferido se guarda automáticamente en `~/.config/plasma-bonsai/config.json`.
+* **Alertas Inteligentes:** Si Ollama está detenido o no hay modelos descargados, el widget te mostrará un aviso explicativo con el comando exacto para solucionarlo.
 
 ---
 

@@ -21,6 +21,10 @@ Item {
     property bool isBusy: false
     property bool daemonConnected: false
     property string capturedImageB64: ""
+    property bool ollamaInstalled: true
+    property bool ollamaRunning: true
+    property var availableModels: []
+    property string currentModel: ""
 
     ListModel {
         id: chatModel
@@ -66,23 +70,29 @@ Item {
                 }
 
                 PlasmaComponents.Label {
-                    text: "Bonsai Assistant"
+                    text: "Bonsai"
                     font.bold: true
+                }
+
+                // Selector de modelo
+                PlasmaComponents.ComboBox {
+                    id: modelCombo
+                    visible: root.daemonConnected && modelComboModel.count > 0
                     Layout.fillWidth: true
+                    model: ListModel { id: modelComboModel }
+                    textRole: "text"
+                    onActivated: {
+                        var selected = modelComboModel.get(index).text
+                        root.switchModel(selected)
+                    }
                 }
 
                 Rectangle {
                     width: Kirigami.Units.gridUnit * 0.5
                     height: width
                     radius: width / 2
-                    color: root.daemonConnected ? "#27ae60" : "#e74c3c"
+                    color: !root.daemonConnected ? "#e74c3c" : (!root.ollamaRunning ? "#e67e22" : "#27ae60")
                     Layout.alignment: Qt.AlignVCenter
-                }
-
-                PlasmaComponents.Label {
-                    text: root.daemonConnected ? "Listo" : "Desconectado"
-                    font.pointSize: Kirigami.Theme.smallFont.pointSize
-                    opacity: 0.7
                 }
 
                 PlasmaComponents.ToolButton {
@@ -92,6 +102,46 @@ Item {
                     ToolTip.text: "Limpiar conversación"
                     ToolTip.visible: hovered
                     onClicked: root.clearChat()
+                }
+            }
+
+            // Banner de aviso si Ollama está detenido, no instalado o sin modelos
+            Rectangle {
+                visible: root.daemonConnected && (!root.ollamaRunning || !root.ollamaInstalled || root.availableModels.length === 0)
+                Layout.fillWidth: true
+                implicitHeight: warningCol.implicitHeight + 12
+                radius: 4
+                color: "#d35400"
+
+                ColumnLayout {
+                    id: warningCol
+                    anchors.fill: parent
+                    anchors.margins: 6
+                    spacing: 2
+
+                    PlasmaComponents.Label {
+                        Layout.fillWidth: true
+                        font.bold: true
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        color: "#ffffff"
+                        text: !root.ollamaInstalled 
+                              ? "⚠️ Ollama no está instalado en el sistema."
+                              : (!root.ollamaRunning 
+                                 ? "⚠️ Ollama no está en ejecución (localhost:11434)."
+                                 : "⚠️ No hay modelos descargados en Ollama.")
+                    }
+
+                    PlasmaComponents.Label {
+                        Layout.fillWidth: true
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize * 0.9
+                        color: "#ffffff"
+                        wrapMode: Text.Wrap
+                        text: !root.ollamaInstalled 
+                              ? "Visita ollama.com o ejecuta 'curl -fsSL https://ollama.ai/install.sh | sh'"
+                              : (!root.ollamaRunning 
+                                 ? "Inícialo abriendo un terminal y ejecutando: 'ollama serve'"
+                                 : "Descarga uno ejecutando: 'ollama pull qwen2.5' o 'ollama pull llama3.1'")
+                    }
                 }
             }
 
@@ -356,14 +406,47 @@ Item {
     // Funciones hacia el demonio en 127.0.0.1:11435
     function checkDaemonHealth() {
         var xhr = new XMLHttpRequest()
-        xhr.open("GET", root.daemonUrl + "/health")
-        xhr.timeout = 2000
+        xhr.open("GET", root.daemonUrl + "/models")
+        xhr.timeout = 2500
         xhr.onreadystatechange = function() {
             if (xhr.readyState === XMLHttpRequest.DONE) {
                 root.daemonConnected = (xhr.status === 200)
+                if (xhr.status === 200) {
+                    try {
+                        var d = JSON.parse(xhr.responseText)
+                        root.ollamaInstalled = d.installed
+                        root.ollamaRunning = d.running
+                        root.currentModel = d.current_model || ""
+                        root.availableModels = d.models || []
+
+                        // Si la lista de modelos ha cambiado, actualizar el ComboBox
+                        if (d.models && d.models.length > 0) {
+                            if (modelComboModel.count !== d.models.length) {
+                                modelComboModel.clear()
+                                var targetIdx = 0
+                                for (var i = 0; i < d.models.length; i++) {
+                                    modelComboModel.append({"text": d.models[i]})
+                                    if (d.models[i] === d.current_model) {
+                                        targetIdx = i
+                                    }
+                                }
+                                modelCombo.currentIndex = targetIdx
+                            }
+                        } else {
+                            modelComboModel.clear()
+                        }
+                    } catch (e) {}
+                }
             }
         }
         xhr.send()
+    }
+
+    function switchModel(modelName) {
+        var xhr = new XMLHttpRequest()
+        xhr.open("POST", root.daemonUrl + "/set_model")
+        xhr.setRequestHeader("Content-Type", "application/json")
+        xhr.send(JSON.stringify({"model": modelName}))
     }
 
     function clearChat() {
