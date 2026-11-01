@@ -5,9 +5,11 @@
 [![Ollama](https://img.shields.io/badge/Ollama-Local%20AI-orange)](https://ollama.com/)
 [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/Canx)
 
-**Plasma Bonsai Assistant** es un widget (*Plasmoid*) nativo para el entorno de escritorio **KDE Plasma 6** que integra modelos de lenguaje locales ejecutados en **Ollama** (como `bonsai-2`, `qwen2.5`, `llama3.1`, `gemma4`) directamente en tu panel o escritorio, con capacidades de **visión multimodal** y **control del sistema**.
+[Español](README.es.md) | **English**
 
-Funciona **100% en espacio de usuario**: no requiere demonios permanentes en segundo plano, puertos intermedios abiertos ni permisos de administrador.
+**Plasma Bonsai Assistant** is a native widget (*Plasmoid*) for **KDE Plasma 6** that integrates local Large Language Models powered by **Ollama** (such as `qwen2.5`, `llama3.1`, `bonsai-2`, `gemma2`) directly into your desktop panel or desktop view, featuring **multimodal desktop vision**, **bilingual localization**, and **natural language system actions**.
+
+Built **100% in user space**: no persistent resident background daemons, no intermediate open network ports, and no root permissions required.
 
 <p align="center">
   <img src="assets/screenshots/screenshot.png" alt="Plasma Bonsai Assistant Screenshot" width="420"/>
@@ -15,109 +17,126 @@ Funciona **100% en espacio de usuario**: no requiere demonios permanentes en seg
 
 ---
 
-## ✨ Características Principales
+## ✨ Key Features
 
-* 🔒 **100% Privado y Local:** Se conecta directamente a tu servidor Ollama local en `http://localhost:11434`. Cero telemetría externa.
-* ⚡ **Arquitectura Standalone (Sin demonio residente):** Funciona directamente desde el Plasmoid de KDE. No consume memoria en segundo plano cuando no se está utilizando.
-* 🎨 **UI Nativa en Qt6 / Kirigami:**
-  * Respuestas en tiempo real con **streaming de tokens**.
-  * Renderizado enriquecido de **Markdown** (negritas, cursivas, listas, código).
-  * Botón para **copiar respuestas al portapapeles** con un solo clic.
-  * Selector desplegable para cambiar de modelo al vuelo.
-* 📸 **Visión Multimodal del Escritorio:** Captura instantánea de pantalla con Spectacle para analizar ventanas, código o errores visuales con modelos con soporte de visión.
-* 🛠️ **Acciones del Sistema (Tool Calling):**
-  * **Brillo de pantalla:** Consulta y ajuste porcentual a través de `org.kde.Solid.PowerManagement`.
-  * **Audio del sistema:** Consulta, ajuste de volumen y silencio mediante PulseAudio / PipeWire.
-  * **Fondo de pantalla:** Cambio dinámico del wallpaper de Plasma según temática o archivo.
-  * **Abrir aplicaciones:** Lanzamiento de apps (`terminal/konsole`, `kate`, `firefox`, `dolphin`, etc.).
-  * **Gestión de ventanas:** Vista general de ventanas (*overview*), mostrar escritorio y mosaico 50/50.
-  * **Creación de carpetas:** Creación segura de carpetas en el directorio personal (ej: *"Crea una carpeta llamada Fotos en Descargas"*).
-  * **Búsqueda y apertura de archivos:** Búsqueda rápida de documentos por nombre y contenido en KDE Baloo y apertura automática con su app predeterminada (ej: *"Busca el documento proyecto y ábrelo"*).
-  * **Temporizadores y alarmas:** Avisos de cuenta atrás con sonido y notificación nativa (ej: *"Pon un temporizador de 10 minutos para la pizza"*).
-  * **Seguridad y avisos:** Bloqueo inmediato de sesión y notificaciones nativas del escritorio.
+* 🔒 **100% Private & Local:** Directly connects to your local Ollama server at `http://localhost:11434`. Zero telemetry, zero tracking, no cloud dependencies or API keys.
+* ⚡ **Standalone & Daemonless Architecture:** Runs purely within the KDE Plasmoid environment. Consumes zero RAM when not in use.
+* 🎨 **Native Qt6 / Kirigami UI:**
+  * Real-time token streaming with animated typing indicator.
+  * Rich **Markdown** rendering (headers, bold, italics, lists, code blocks).
+  * Quick **copy-to-clipboard** button on assistant messages.
+  * Dropdown selector to switch between local Ollama models on the fly.
+* 📸 **Multimodal Desktop Vision:** Integrated screenshot tool using Spectacle to analyze windows, code snippets, or error dialogs with vision-capable models (e.g., `llava`, `bonsai-2`, `qwen2.5-vl`).
+* 🛠️ **System Control & Actions (Tool Calling):**
+  * **Screen Brightness:** Query and adjust exact percentage via `org.kde.Solid.PowerManagement`.
+  * **Audio Control:** Query, adjust volume, and mute/unmute via PipeWire / PulseAudio.
+  * **Wallpaper:** Change Plasma wallpaper on demand by theme or specific filename.
+  * **Launch Applications:** Open apps (`terminal/konsole`, `kate`, `firefox`, `dolphin`, etc.).
+  * **Window Management:** Toggle desktop view, overview, or 50/50 window tiling.
+  * **Safe Directory Creation:** Create folders safely inside `$HOME` (e.g., *"Create a folder named Project in Documents"*).
+  * **Document Search & Open:** Fast file/document search with native **KDE Baloo** and automatic document opening with default applications (e.g., *"Find the invoice PDF and open it"*).
+  * **Timers & Alarms:** Countdown alarms with sound and native Plasma notifications (e.g., *"Set a 10 minute pizza timer"*).
+  * **Security & Lock:** Instantly lock the desktop session.
+* ⚙️ **Integrated In-Widget Settings:**
+  * Custom Ollama server URL (supports local or LAN/remote instances).
+  * Response language preference (`Auto`, `English`, `Español`).
+  * Custom Instructions (System Prompt).
 
 ---
 
-## 🏛️ Arquitectura del Sistema
+## 🏛️ Architecture
 
 ```mermaid
 flowchart TD
-    User["👤 Usuario (Panel / Atajo de teclado)"] --> QML["🖥️ Plasmoid Nativo Qt6 (KDE Plasma 6)"]
-    QML -->|Streaming HTTP Directo| Ollama["🦙 Ollama Server (localhost:11434)"]
-    QML -.->|Herramientas bajo demanda| Tools["⚙️ Runner de Acciones del Sistema"]
+    User["👤 User (Panel / Shortcut)"] --> QML["🖥️ Native Qt6 Plasmoid (KDE Plasma 6)"]
+    QML -->|Direct HTTP Streaming| Ollama["🦙 Ollama Server (localhost:11434)"]
+    QML -.->|On-demand Tools| Tools["⚙️ System Tool Runner"]
     
-    subgraph Tools["Acciones del Sistema"]
-        Solid["🔆 Solid PowerManagement (Brillo)"]
-        Audio["🔊 Audio PipeWire / PulseAudio (Volumen)"]
-        Spectacle["📸 Spectacle (Captura de pantalla)"]
-        PlasmaShell["🖼️ PlasmaShell (Fondo de pantalla)"]
-        KWin["🪟 KWin (Ventanas y Atajos)"]
+    subgraph Tools["System Actions"]
+        Solid["🔆 Solid PowerManagement (Brightness)"]
+        Audio["🔊 Audio PipeWire / PulseAudio (Volume)"]
+        Spectacle["📸 Spectacle (Screenshot / Vision)"]
+        Baloo["🔎 Baloo / Filesystem (Search & Open)"]
+        PlasmaShell["🖼️ PlasmaShell (Wallpaper)"]
+        KWin["🪟 KWin (Window Management)"]
     end
 ```
 
 ---
 
-## 📁 Estructura del Repositorio
+## 📁 Repository Structure
 
 ```text
 plasma-bonsai/
-├── plasmoid/                       # Paquete de la extensión KDE Plasma 6
-│   ├── metadata.json               # Metadatos para Plasma 6 (X-Plasma-API-Minimum-Version: 6.0)
+├── plasmoid/                       # KDE Plasma 6 applet package
+│   ├── metadata.json               # Plasma 6 metadata (com.github.canx.plasma-bonsai)
 │   └── contents/
+│       ├── config/                 # Plasma config declarations (main.xml, config.qml)
+│       ├── icons/                  # Scalable SVG & PNG applet icons
+│       ├── locale/                 # Translation catalogs (gettext PO/MO)
 │       ├── ui/
-│       │   └── main.qml            # Interfaz gráfica en PlasmoidItem / Kirigami
+│       │   ├── main.qml            # Main Kirigami user interface
+│       │   └── ConfigGeneral.qml   # Native settings page
 │       └── code/
-│           └── tools.py            # Runner de herramientas del sistema (Python estándar + D-Bus)
+│           └── tools.py            # Standard Python + D-Bus system tool runner
 ├── scripts/
-│   ├── install.sh                  # Instalación local con kpackagetool6
-│   └── run-dev.sh                  # Entorno de pruebas aislado con plasmawindowed
-├── README.md                       # Documentación principal
-└── LICENSE                         # Licencia MIT
+│   ├── install.sh                  # Local installation with kpackagetool6
+│   ├── package.sh                  # Builds standalone .plasmoid package
+│   ├── reload.sh                   # Builds, installs, and reloads Plasmashell
+│   └── run-dev.sh                  # Isolated test environment with plasmawindowed
+├── assets/                         # High-res icons and desktop screenshots
+├── docs/                           # Store listings and publishing documentation
+├── README.md                       # Main documentation (English)
+├── README.es.md                    # Documentación en Español
+└── LICENSE                         # MIT License
 ```
 
 ---
 
-## 🚀 Requisitos Previos
+## 🚀 Requirements
 
 1. **KDE Plasma 6**
-2. **Python 3** (incluido por defecto en cualquier distribución Linux moderna)
-3. **Ollama:** Ejecutándose en `localhost:11434`
-   * Si aún no tienes Ollama instalado:
+2. **Python 3** (included in all modern Linux distributions)
+3. **Ollama:** Running locally on `http://localhost:11434`
+   * If you don't have Ollama installed yet:
      ```bash
      curl -fsSL https://ollama.ai/install.sh | sh
      ```
-   * Puedes descargar cualquier modelo con soporte de chat o visión:
+   * Pull your preferred models:
      ```bash
-     ollama pull bonsai-2:latest
-     # Alternativas recomendadas:
      ollama pull qwen2.5:7b
      ollama pull llama3.1:8b
+     ollama pull bonsai-2:latest
      ```
 
 ---
 
-## 📦 Instalación
+## 📦 Installation
 
-### Desde el repositorio local
-Ejecuta el script de instalación:
+### Option 1: Via KDE Store (Recommended)
+Search for **Plasma Bonsai Assistant** in:
+*Right-click Desktop/Panel -> Add Widgets... -> Get New Widgets...*
+
+### Option 2: From Local Repository
+Run the installation script:
 
 ```bash
 cd plasma-bonsai
 ./scripts/install.sh
 ```
 
-El script registra el plasmoid en tu usuario con `kpackagetool6` (`~/.local/share/plasma/plasmoids/com.github.canx.plasma-bonsai`).
+The script registers the plasmoid in user space with `kpackagetool6` (`~/.local/share/plasma/plasmoids/com.github.canx.plasma-bonsai`).
 
-### Añadir el widget al escritorio
-1. Haz clic derecho en tu panel de KDE o en el escritorio.
-2. Selecciona **Añadir elementos gráficos…** (o presiona `Meta + W`).
-3. Busca **Plasma Bonsai Assistant** y arrástralo a tu barra de tareas.
+### Adding the Widget to Your Panel:
+1. Right-click your KDE panel or desktop.
+2. Select **Add Widgets...** (or press `Meta + W`).
+3. Search for **Plasma Bonsai Assistant** and drag it to your panel.
 
 ---
 
-## 🧪 Pruebas en Modo Desarrollo
+## 🧪 Development & Testing
 
-Para probar el widget en una ventana flotante de desarrollo sin alterar tus paneles:
+To test the widget inside an isolated floating development window without modifying your desktop panels:
 
 ```bash
 ./scripts/run-dev.sh
@@ -125,48 +144,49 @@ Para probar el widget en una ventana flotante de desarrollo sin alterar tus pane
 
 ---
 
-## 🛠️ Ejemplos de Interacción
+## 🛠️ Example Prompts
 
-* **Ajustar brillo:** *"Baja el brillo de la pantalla al 30%"*
-* **Controlar volumen:** *"Pon el volumen al 50%"* o *"Silencia el audio"*
-* **Cambiar fondo:** *"Pon un fondo de pantalla oscuro"* o *"Cambia el fondo a uno de montaña"*
-* **Abrir aplicaciones:** *"Abre la terminal"*, *"Abre Kate"* o *"Abre el navegador"*
-* **Gestión de ventanas:** *"Muestra el escritorio"* o *"Pon la ventana en mosaico"*
-* **Temporizadores y alarmas:** *"Pon un temporizador de 10 minutos para la pizza"*, *"¿Cuánto queda de temporizador?"* o *"Cancela la alarma"*
-* **Analizar la pantalla:** Pulsa el icono de la cámara 📸 y escribe *"¿Qué error se ve en esta pantalla?"*
-* **Bloquear escritorio:** *"Bloquea la sesión"*
-
----
-
-## 🗺️ Hoja de Ruta y Próximas Funcionalidades
-
-Consulta el archivo [TODO.md](TODO.md) para ver la lista detallada de tareas planificadas, destacando:
-* 🎙️ **Interacción por voz (Speech-to-Text local con Whisper y síntesis de voz TTS)**
-* 🎵 **Control multimedia universal (Spotify, VLC, YouTube vía MPRIS2)**
-* 🌓 **Conmutador de tema oscuro / claro al vuelo**
-* 🔋 **Estado de batería y recursos del sistema (RAM / CPU)**
-* 📋 **Integración con el historial del portapapeles de KDE (Klipper)**
-* 🔎 **Búsqueda rápida de archivos en local (Baloo / fd)**
+* **Brightness:** *"Lower screen brightness to 30%"*
+* **Volume:** *"Set volume to 50%"* or *"Mute audio"*
+* **Wallpaper:** *"Set a dark wallpaper"* or *"Change wallpaper to mountain theme"*
+* **Launch Applications:** *"Open terminal"*, *"Open Kate"*, or *"Launch web browser"*
+* **Window Management:** *"Show desktop"* or *"Tile windows 50/50"*
+* **File Operations:** *"Create a folder named Invoices in Documents"*
+* **Search & Open:** *"Find document report.pdf and open it"*
+* **Timers:** *"Set a 10 minute pizza timer"*, *"How much time is left?"*, or *"Cancel the timer"*
+* **Desktop Vision:** Click the camera icon 📸 and ask *"What error is shown in this window?"*
+* **Security:** *"Lock the screen"*
 
 ---
 
-## 🔒 Seguridad y Privacidad
+## 🗺️ Roadmap & Upcoming Features
 
-* **100% Offline y Privado:** Todo el procesamiento del modelo de lenguaje se realiza en tu equipo. Ninguna información, texto ni imagen sale a internet.
-* **Sin demonios residentes ni puertos adicionales:** El widget no abre puertos de red ni deja procesos permanentemente en ejecución.
-* **Privilegios estándar:** No se requieren permisos de administrador (`root` o `sudo`).
-
----
-
-## 💖 Apoyar el Proyecto / Support
-
-Plasma Bonsai es 100% libre, gratuito y privado. Si te resulta útil en tu día a día, puedes apoyar su desarrollo y mantenimiento continuo:
-
-* 💖 **[Patrocinar en GitHub Sponsors](https://github.com/sponsors/Canx)**
-* ☕ **[Invítame a un café en Ko-fi](https://ko-fi.com/canx)**
+See [TODO.md](TODO.md) for the planned features roadmap, including:
+* 🎙️ **Voice interaction (Offline Speech-to-Text with Whisper & Piper TTS)**
+* 🎵 **Universal media player control (Spotify, VLC, YouTube via MPRIS2)**
+* 🌓 **Quick dark/light color scheme switcher**
+* 🔋 **Hardware & battery status queries**
+* 📋 **Klipper clipboard history integration**
 
 ---
 
-## 📄 Licencia
+## 🔒 Security & Privacy
 
-Distribuido bajo la licencia MIT. Consulta `LICENSE` para más información.
+* **100% Offline & Private:** All LLM inference runs directly on your machine. No text, prompts, or images leave your local network.
+* **No Resident Background Daemons:** The widget does not open background network listener ports or keep idle memory-hogging processes running.
+* **Standard Permissions:** No administrative (`root` or `sudo`) privileges required.
+
+---
+
+## 💖 Support the Project
+
+Plasma Bonsai is 100% free, private, and open-source. If you find it useful, consider supporting its development:
+
+* 💖 **[Sponsor on GitHub Sponsors](https://github.com/sponsors/Canx)**
+* ☕ **[Buy me a coffee on Ko-fi](https://ko-fi.com/canx)**
+
+---
+
+## 📄 License
+
+Distributed under the MIT License. See `LICENSE` for details.
