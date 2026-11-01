@@ -32,6 +32,16 @@ PlasmoidItem {
     property var toolDefinitions: []
     property var conversationHistory: []
 
+    readonly property bool isEnglish: {
+        if (root.preferredLanguage === "en") return true
+        if (root.preferredLanguage === "es") return false
+        return (Qt.locale().name.indexOf("es") !== 0)
+    }
+
+    function tr(enText, esText) {
+        return root.isEnglish ? enText : esText
+    }
+
     Timer {
         id: startOllamaRetryTimer
         interval: 1500
@@ -149,7 +159,7 @@ PlasmoidItem {
                     radius: width / 2
                     color: root.ollamaConnected ? "#27ae60" : "#e74c3c"
                     Layout.alignment: Qt.AlignVCenter
-                    ToolTip.text: root.ollamaConnected ? i18n("Connected to Ollama (127.0.0.1:11434)") : i18n("Ollama not reachable")
+                    ToolTip.text: root.ollamaConnected ? root.tr("Connected to Ollama (127.0.0.1:11434)", "Conectado a Ollama (127.0.0.1:11434)") : root.tr("Ollama not reachable", "Ollama no disponible")
                     ToolTip.visible: statusMouse.containsMouse
 
                     MouseArea {
@@ -162,18 +172,18 @@ PlasmoidItem {
 
                 PlasmaComponents.ToolButton {
                     icon.name: "edit-clear-all"
-                    text: i18n("Clear")
+                    text: root.tr("Clear", "Limpiar")
                     display: PlasmaComponents.AbstractButton.IconOnly
-                    ToolTip.text: i18n("Clear conversation")
+                    ToolTip.text: root.tr("Clear conversation", "Limpiar conversación")
                     ToolTip.visible: hovered
                     onClicked: root.clearChat()
                 }
 
                 PlasmaComponents.ToolButton {
                     icon.name: root.showSettings ? "chat" : "configure"
-                    text: root.showSettings ? i18n("Chat") : i18n("Configure")
+                    text: root.showSettings ? root.tr("Chat", "Chat") : root.tr("Configure", "Configurar")
                     display: PlasmaComponents.AbstractButton.IconOnly
-                    ToolTip.text: root.showSettings ? i18n("Back to chat") : i18n("Configure Bonsai")
+                    ToolTip.text: root.showSettings ? root.tr("Back to chat", "Volver al chat") : root.tr("Configure Bonsai", "Configurar Bonsai")
                     ToolTip.visible: hovered
                     onClicked: root.showSettings = !root.showSettings
                 }
@@ -213,8 +223,8 @@ PlasmoidItem {
                             font.pointSize: Kirigami.Theme.smallFont.pointSize
                             color: "#ffffff"
                             text: !root.ollamaConnected 
-                                  ? i18n("⚠️ Ollama is not running on localhost:11434")
-                                  : i18n("⚠️ No models downloaded in Ollama")
+                                  ? root.tr("⚠️ Ollama is not running on localhost:11434", "⚠️ Ollama no se está ejecutando en localhost:11434")
+                                  : root.tr("⚠️ No models downloaded in Ollama", "⚠️ No hay modelos descargados en Ollama")
                         }
 
                         PlasmaComponents.Label {
@@ -223,15 +233,15 @@ PlasmoidItem {
                             color: "#ffffff"
                             wrapMode: Text.Wrap
                             text: !root.ollamaConnected 
-                                  ? i18n("Click the button to start Ollama or run 'ollama serve'.")
-                                  : i18n("Download the model: 'ollama pull bonsai-2:latest'")
+                                  ? root.tr("Click the button to start Ollama or run 'ollama serve'.", "Pulsa el botón para iniciar Ollama o ejecuta 'ollama serve'.")
+                                  : root.tr("Download the model: 'ollama pull bonsai-2:latest'", "Descarga el modelo: 'ollama pull bonsai-2:latest'")
                         }
                     }
 
                     PlasmaComponents.Button {
                         visible: !root.ollamaConnected
                         icon.name: "media-playback-start"
-                        text: i18n("Start")
+                        text: root.tr("Start", "Iniciar")
                         onClicked: root.startOllamaService()
                     }
                 }
@@ -354,7 +364,7 @@ PlasmoidItem {
                                 width: parent.width
 
                                 PlasmaComponents.Label {
-                                    text: bubbleDelegate.isUser ? i18n("You") : "Bonsai"
+                                    text: bubbleDelegate.isUser ? root.tr("You", "Tú") : "Bonsai"
                                     font.bold: true
                                     font.pointSize: Kirigami.Theme.smallFont.pointSize
                                     color: bubbleDelegate.isUser ? Kirigami.Theme.highlightedTextColor : "#27ae60"
@@ -369,7 +379,7 @@ PlasmoidItem {
                                     display: PlasmaComponents.AbstractButton.IconOnly
                                     Layout.preferredWidth: Kirigami.Units.iconSizes.small
                                     Layout.preferredHeight: Kirigami.Units.iconSizes.small
-                                    ToolTip.text: i18n("Listen to response")
+                                    ToolTip.text: root.tr("Listen to response", "Escuchar respuesta")
                                     ToolTip.visible: hovered
                                     onClicked: root.speakResponse(model.text)
                                 }
@@ -381,7 +391,7 @@ PlasmoidItem {
                                     display: PlasmaComponents.AbstractButton.IconOnly
                                     Layout.preferredWidth: Kirigami.Units.iconSizes.small
                                     Layout.preferredHeight: Kirigami.Units.iconSizes.small
-                                    ToolTip.text: i18n("Copy response to clipboard")
+                                    ToolTip.text: root.tr("Copy response to clipboard", "Copiar respuesta al portapapeles")
                                     ToolTip.visible: hovered
                                     onClicked: root.copyToClipboard(model.text)
                                 }
@@ -446,7 +456,7 @@ PlasmoidItem {
                             } else if (root.attachedFileName !== "") {
                                 return "🖼️ " + root.attachedFileName
                             } else {
-                                return "📸 " + i18n("Screenshot ready for analysis")
+                                return "📸 " + root.tr("Screenshot ready for analysis", "Captura lista para analizar")
                             }
                         }
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
@@ -457,7 +467,7 @@ PlasmoidItem {
                 PlasmaComponents.ToolButton {
                     icon.name: "dialog-close"
                     display: PlasmaComponents.AbstractButton.IconOnly
-                    ToolTip.text: i18n("Remove attachment")
+                    ToolTip.text: root.tr("Remove attachment", "Quitar archivo adjunto")
                     ToolTip.visible: hovered
                     onClicked: root.clearAttachment()
                 }
@@ -491,7 +501,7 @@ PlasmoidItem {
                     id: micBtn
                     icon.name: root.isRecordingVoice ? "media-record" : "audio-input-microphone"
                     display: PlasmaComponents.AbstractButton.IconOnly
-                    ToolTip.text: root.isRecordingVoice ? i18n("Stop recording and send") : i18n("Voice input (Push-to-talk)")
+                    ToolTip.text: root.isRecordingVoice ? root.tr("Stop recording and send", "Detener grabación y enviar") : root.tr("Voice input (Push-to-talk)", "Entrada de voz (Pulsar para hablar)")
                     ToolTip.visible: hovered
                     enabled: !root.isBusy
                     onClicked: root.toggleVoiceInput()
@@ -499,7 +509,7 @@ PlasmoidItem {
 
                 PlasmaComponents.ToolButton {
                     icon.name: "camera-photo"
-                    ToolTip.text: i18n("Capture screenshot to analyze")
+                    ToolTip.text: root.tr("Capture screenshot to analyze", "Hacer captura de pantalla para analizar")
                     ToolTip.visible: hovered
                     enabled: !root.isBusy && !root.isRecordingVoice
                     onClicked: root.requestScreenshot()
@@ -508,7 +518,7 @@ PlasmoidItem {
                 PlasmaComponents.ToolButton {
                     id: attachBtn
                     icon.name: "mail-attachment"
-                    ToolTip.text: (root.preferredLanguage === "es") ? "Adjuntar archivo o documento (PDF, código, texto, imagen)" : i18n("Attach file or document (PDF, code, text, image)")
+                    ToolTip.text: root.tr("Attach file or document (PDF, code, text, image)", "Adjuntar archivo o documento (PDF, código, texto, imagen)")
                     ToolTip.visible: hovered
                     enabled: !root.isBusy && !root.isRecordingVoice
                     onClicked: root.requestAttachFile()
@@ -531,7 +541,7 @@ PlasmoidItem {
                 PlasmaComponents.Button {
                     id: sendBtn
                     icon.name: "document-send"
-                    text: i18n("Send")
+                    text: root.tr("Send", "Enviar")
                     enabled: !root.isBusy && (promptInput.text.trim().length > 0 || root.capturedImageB64 !== "" || root.attachedFileName !== "")
                     onClicked: {
                         var val = promptInput.text.trim()
@@ -559,7 +569,7 @@ PlasmoidItem {
                 spacing: Kirigami.Units.smallSpacing
 
                 PlasmaComponents.Label {
-                    text: i18n("⚙️ Bonsai Settings")
+                    text: root.tr("⚙️ Bonsai Settings", "⚙️ Ajustes de Bonsai")
                     font.bold: true
                     font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.15
                     Layout.fillWidth: true
@@ -567,7 +577,7 @@ PlasmoidItem {
 
                 PlasmaComponents.Button {
                     icon.name: "go-previous"
-                    text: i18n("Back")
+                    text: root.tr("Back", "Volver")
                     onClicked: root.showSettings = false
                 }
             }
@@ -590,7 +600,7 @@ PlasmoidItem {
 
                     // 1. Ollama URL
                     PlasmaComponents.Label {
-                        text: i18n("Ollama Server URL:")
+                        text: root.tr("Ollama Server URL:", "URL del Servidor Ollama:")
                         font.bold: true
                     }
 
@@ -606,7 +616,7 @@ PlasmoidItem {
                         }
 
                         PlasmaComponents.Button {
-                            text: i18n("Test")
+                            text: root.tr("Test", "Probar")
                             icon.name: "network-connect"
                             onClicked: {
                                 root.ollamaUrl = settingsUrlInput.text.trim() || "http://127.0.0.1:11434"
@@ -617,7 +627,7 @@ PlasmoidItem {
 
                     // 2. Idioma de Respuesta
                     PlasmaComponents.Label {
-                        text: i18n("Response Language:")
+                        text: root.tr("Response Language:", "Idioma de respuesta:")
                         font.bold: true
                     }
 
@@ -626,9 +636,9 @@ PlasmoidItem {
                         Layout.fillWidth: true
                         textRole: "text"
                         model: [
-                            { text: i18n("Automatic (match user input)"), value: "auto" },
-                            { text: i18n("Always English"), value: "en" },
-                            { text: i18n("Always Spanish"), value: "es" }
+                            { text: root.tr("Automatic (match user input)", "Automático (según lo escrito)"), value: "auto" },
+                            { text: root.tr("Always English", "Siempre Inglés"), value: "en" },
+                            { text: root.tr("Always Spanish", "Siempre Español"), value: "es" }
                         ]
                         Component.onCompleted: {
                             for (var i = 0; i < model.length; i++) {
@@ -642,7 +652,7 @@ PlasmoidItem {
 
                     // 3. System Prompt Personalizado
                     PlasmaComponents.Label {
-                        text: i18n("Custom Instructions (System Prompt):")
+                        text: root.tr("Custom Instructions (System Prompt):", "Instrucciones personalizadas (System Prompt):")
                         font.bold: true
                     }
 
@@ -651,7 +661,7 @@ PlasmoidItem {
                         Layout.fillWidth: true
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 5
                         text: root.customSystemPrompt
-                        placeholderText: i18n("Optional instructions (e.g. 'Always answer in English, be concise and use bullet points').")
+                        placeholderText: root.tr("Optional instructions (e.g. 'Always answer in English, be concise and use bullet points').", "Instrucciones opcionales (ej: 'Responde siempre de forma concisa y usa viñetas').")
                         wrapMode: TextEdit.Wrap
                     }
 
@@ -664,7 +674,7 @@ PlasmoidItem {
 
                         PlasmaComponents.Button {
                             icon.name: "dialog-ok-apply"
-                            text: i18n("Save Settings")
+                            text: root.tr("Save Settings", "Guardar ajustes")
                             Layout.fillWidth: true
                             onClicked: {
                                 var newUrl = settingsUrlInput.text.trim() || "http://127.0.0.1:11434"
@@ -692,7 +702,7 @@ PlasmoidItem {
 
                     // 5. Apoyar el proyecto / GitHub Sponsors
                     PlasmaComponents.ToolButton {
-                        text: root.preferredLanguage === "en" ? "💖 Support on GitHub Sponsors" : i18n("💖 Apoyar en GitHub Sponsors")
+                        text: root.tr("💖 Support on GitHub Sponsors", "💖 Apoyar en GitHub Sponsors")
                         icon.name: "help-donate"
                         Layout.fillWidth: true
                         onClicked: Qt.openUrlExternally("https://github.com/sponsors/Canx")
@@ -714,38 +724,28 @@ PlasmoidItem {
     }
 
     function getWelcomeMessage() {
-        if (root.preferredLanguage === "en") {
-            return "Hello! I am Bonsai, your native local assistant for KDE Plasma. I can answer questions, analyze screenshots, or control desktop settings (brightness, volume, notifications, windows) completely offline via Ollama."
-        } else if (root.preferredLanguage === "es") {
-            return "¡Hola! Soy Bonsai, tu asistente local nativo para KDE Plasma. Puedo responder preguntas, analizar capturas de pantalla o controlar el escritorio (brillo, volumen, notificaciones, ventanas) completamente en local mediante Ollama."
-        }
-        return i18n("Hello! I am Bonsai, your native local assistant for KDE Plasma. I can answer questions, analyze screenshots, or control desktop settings (brightness, volume, notifications, windows) completely offline via Ollama.")
+        return root.tr(
+            "Hello! I am Bonsai, your native local assistant for KDE Plasma. I can answer questions, analyze screenshots and documents, or control desktop settings completely offline via Ollama.",
+            "¡Hola! Soy Bonsai, tu asistente local nativo para KDE Plasma. Puedo responder preguntas, analizar capturas y documentos o controlar el escritorio completamente en local mediante Ollama."
+        )
     }
 
     function getClearedMessage() {
-        if (root.preferredLanguage === "en") {
-            return "Conversation cleared. How can I help you?"
-        } else if (root.preferredLanguage === "es") {
-            return "Conversación reiniciada. ¿En qué te puedo ayudar?"
-        }
-        return i18n("Conversation cleared. How can I help you?")
+        return root.tr(
+            "Conversation cleared. How can I help you?",
+            "Conversación reiniciada. ¿En qué te puedo ayudar?"
+        )
     }
 
     function getPlaceholderText() {
         if (root.isRecordingVoice) {
-            if (root.preferredLanguage === "en") return "🔴 Listening… Click mic again to send"
-            if (root.preferredLanguage === "es") return "🔴 Escuchando… Pulsa el micrófono para enviar"
-            return i18n("🔴 Listening… Click mic again to send")
+            return root.tr("🔴 Listening… Click mic again to send", "🔴 Escuchando… Pulsa el micrófono para enviar")
         }
-        if (root.preferredLanguage === "en") return "Ask or request an action from Bonsai…"
-        if (root.preferredLanguage === "es") return "Pregunta o pide una acción a Bonsai…"
-        return i18n("Ask or request an action from Bonsai…")
+        return root.tr("Ask or request an action from Bonsai…", "Pregunta o pide una acción a Bonsai…")
     }
 
     function getThinkingText() {
-        if (root.preferredLanguage === "en") return "Bonsai is thinking…"
-        if (root.preferredLanguage === "es") return "Bonsai está pensando…"
-        return i18n("Bonsai is thinking…")
+        return root.tr("Bonsai is thinking…", "Bonsai está pensando…")
     }
 
     onPreferredLanguageChanged: {
@@ -813,7 +813,7 @@ PlasmoidItem {
                         } else if (res2.not_installed) {
                             chatModel.append({
                                 "role": "assistant",
-                                "text": i18n("Whisper Speech-to-Text is not installed. You can install it with: ./scripts/install-voice.sh"),
+                                "text": root.tr("Whisper Speech-to-Text is not installed. You can install it with: ./scripts/install-voice.sh", "Whisper Speech-to-Text no está instalado. Puedes instalarlo ejecutando: ./scripts/install-voice.sh"),
                                 "toolInfo": ""
                             })
                         }
@@ -977,9 +977,9 @@ PlasmoidItem {
         var userDisplayText = text
         if (hasDoc) {
             var docPrefix = "📄 **[" + root.attachedFileName + "]**\n"
-            userDisplayText = docPrefix + (text !== "" ? text : i18n("Please analyze or summarize this document."))
+            userDisplayText = docPrefix + (text !== "" ? text : root.tr("Please analyze or summarize this document.", "Por favor analiza o resume este documento."))
         } else if (hasImg && text === "") {
-            userDisplayText = (root.attachedFileName !== "") ? ("🖼️ **[" + root.attachedFileName + "]**") : i18n("[Screenshot attached]")
+            userDisplayText = (root.attachedFileName !== "") ? ("🖼️ **[" + root.attachedFileName + "]**") : root.tr("[Screenshot attached]", "[Captura de pantalla adjunta]")
         }
 
         chatModel.append({
@@ -1143,7 +1143,7 @@ PlasmoidItem {
                 } else {
                     var errText = chatModel.get(assistantIndex).text
                     if (errText === "") {
-                        chatModel.setProperty(assistantIndex, "text", i18n("Error communicating with Ollama (%1). Make sure it is running.", xhr.status))
+                        chatModel.setProperty(assistantIndex, "text", root.tr("Error communicating with Ollama (" + xhr.status + "). Make sure it is running.", "Error al comunicar con Ollama (" + xhr.status + "). Asegúrate de que se está ejecutando."))
                     }
                 }
             }
