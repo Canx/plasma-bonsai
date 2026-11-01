@@ -35,6 +35,9 @@ Built **100% in user space**: no persistent resident background daemons, no inte
   * **Window Management:** Toggle desktop view, overview, or 50/50 window tiling.
   * **Safe Directory Creation:** Create folders safely inside `$HOME` (e.g., *"Create a folder named Project in Documents"*).
   * **Document Search & Open:** Fast file/document search with native **KDE Baloo** and automatic document opening with default applications (e.g., *"Find the invoice PDF and open it"*).
+  * **Attach & Inspect Local Files:** Paperclip button 📎 to attach and analyze documents (PDFs, code files, `.txt`, `.md`, `.json`, `.csv`, `.log`) or images with multimodal vision.
+  * **Direct Document Reading:** Assistant capability to read and summarize files directly from disk (`read_file_content`).
+  * **Clipboard & History:** Inspect copied text, view Klipper history, and copy new text to clipboard.
   * **Timers & Alarms:** Countdown alarms with sound and native Plasma notifications (e.g., *"Set a 10 minute pizza timer"*).
   * **Security & Lock:** Instantly lock the desktop session.
 * ⚙️ **Integrated In-Widget Settings:**
@@ -151,6 +154,8 @@ To test the widget inside an isolated floating development window without modify
 * **Window Management:** *"Show desktop"* or *"Tile windows 50/50"*
 * **File Operations:** *"Create a folder named Invoices in Documents"*
 * **Search & Open:** *"Find document report.pdf and open it"*
+* **Attach & Read Documents:** Click the paperclip 📎 to attach a PDF or source code file, or ask *"Read 'report.pdf' and summarize it"*
+* **Clipboard:** *"What is in my clipboard?"*, *"Clipboard history"*, or *"Copy this text to clipboard"*
 * **Timers:** *"Set a 10 minute pizza timer"*, *"How much time is left?"*, or *"Cancel the timer"*
 * **Desktop Vision:** Click the camera icon 📸 and ask *"What error is shown in this window?"*
 * **Security:** *"Lock the screen"*

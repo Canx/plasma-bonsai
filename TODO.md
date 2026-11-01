@@ -43,18 +43,27 @@ Poder hablar directamente con Bonsai y que responda con voz natural, **100% en l
   - *"¿Cuánta RAM libre tengo?"*, *"¿Qué uso de CPU hay?"*.
   - **Implementación:** `free -m`, `/proc/loadavg` o `ksysguard`.
 
-### 4. Historial del Portapapeles (Klipper) 📋
-- [ ] **Consulta de contenido copiado:**
-  - *"¿Qué tengo en el portapapeles?"*.
-  - *"Busca en el portapapeles el enlace que copié hace un rato"*.
-  - **Implementación:** Interfaz D-Bus de Klipper (`org.kde.klipper`).
+### 4. Portapapeles y Selección de Texto (Klipper / Wayland) 📋 (Completado ✅)
+- [x] **Gestión y consulta inteligente del portapapeles:**
+  - *"¿Qué tengo en el portapapeles?"* o *"¿Qué texto tengo seleccionado?"*.
+  - *"Historial del portapapeles"* o *"Copia este texto al portapapeles"*.
+  - **Implementación:** Integración nativa sin dependencias pesadas vía D-Bus de Klipper (`org.kde.klipper`), con soporte para selección primaria en Wayland (`wl-clipboard`) y X11 (`xclip`).
 
-### 5. Búsqueda Rápida de Archivos en Local 🔎 (Completado ✅)
+### 5. Adjuntar y Leer Archivos Locales (PDFs, Código, Documentos) 📎 (Completado ✅)
+- [x] **Subida y adjunto de archivos locales desde la interfaz:**
+  - Botón de clip 📎 (`mail-attachment`) en la barra inferior para seleccionar cualquier archivo del disco con `kdialog`.
+  - Chip/badge visual con el nombre del archivo adjunto y botón para desadjuntarlo.
+  - Ingesta automática de texto para PDFs (`pdftotext`), código fuente (`.py`, `.js`, `.ts`, `.sh`, etc.), markdown, texto plano, JSON, CSV y logs.
+  - Soporte multimodal automático si el archivo adjunto es una imagen (`.png`, `.jpg`, `.webp`).
+- [x] **Herramienta de lectura de archivos (`read_file_content`):**
+  - El modelo puede leer archivos locales bajo demanda (*"Léete el archivo factura.pdf y resúmelo"*).
+
+### 6. Búsqueda Rápida de Archivos en Local 🔎 (Completado ✅)
 - [x] **Búsqueda de documentos y descargas:**
   - *"Encuentra el PDF que descargué hoy"* o *"Busca el archivo 'proyecto' y ábrelo"*.
   - **Implementación:** Integración híbrida con `baloosearch6` (motor indexado nativo de KDE Plasma 6) y búsqueda por nombre `find` acotada a `$HOME`, con apertura automática mediante `xdg-open` / `kde-open`.
 
-### 6. Información Meteorológica (Clima) ☀️
+### 7. Información Meteorológica (Clima) ☀️
 - [ ] **Consulta meteorológica en lenguaje natural:**
   - *"¿Qué tiempo hace en Valencia?"*, *"¿Va a llover hoy?"*.
   - **Implementación:** API ultraligera JSON de `wttr.in/<ciudad>?format=j1` sin claves de API externas.

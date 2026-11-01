@@ -35,6 +35,9 @@ Funciona **100% en espacio de usuario**: no requiere demonios permanentes en seg
   * **Gestión de ventanas:** Vista general de ventanas (*overview*), mostrar escritorio y mosaico 50/50.
   * **Creación de carpetas:** Creación segura de carpetas en el directorio personal (ej: *"Crea una carpeta llamada Fotos en Descargas"*).
   * **Búsqueda y apertura de archivos:** Búsqueda rápida de documentos por nombre y contenido en KDE Baloo y apertura automática con su app predeterminada (ej: *"Busca el documento proyecto y ábrelo"*).
+  * **Adjuntar y analizar archivos locales:** Botón de clip 📎 para subir y analizar documentos (PDFs, código fuente, archivos `.txt`, `.md`, `.json`, `.csv`, `.log`) o imágenes con visión multimodal.
+  * **Lectura directa de archivos:** Capacidad del asistente para leer y resumir ficheros locales en disco (`read_file_content`).
+  * **Portapapeles y selección activa:** Consulta del contenido copiado, historial de Klipper y copia de texto al portapapeles (ej: *"¿Qué tengo en el portapapeles?"* o *"Copia este texto"*).
   * **Temporizadores y alarmas:** Avisos de cuenta atrás con sonido y notificación nativa (ej: *"Pon un temporizador de 10 minutos para la pizza"*).
   * **Seguridad y avisos:** Bloqueo inmediato de sesión y notificaciones nativas del escritorio.
 * ⚙️ **Panel de Ajustes Integrado:**
@@ -151,6 +154,8 @@ Para probar el widget en una ventana flotante de desarrollo sin alterar tus pane
 * **Gestión de ventanas:** *"Muestra el escritorio"* o *"Pon la ventana en mosaico"*
 * **Crear carpetas:** *"Crea una carpeta llamada Facturas en Documentos"*
 * **Buscar y abrir archivos:** *"Busca el documento proyecto y ábrelo"*
+* **Adjuntar y leer archivos:** Pulsa el icono de clip 📎 para subir un PDF o código, o di *"Léete el archivo 'factura.pdf' y dime el total"*
+* **Portapapeles:** *"¿Qué tengo en el portapapeles?"*, *"Historial del portapapeles"* o *"Copia 'Hola' al portapapeles"*
 * **Temporizadores y alarmas:** *"Pon un temporizador de 10 minutos para la pizza"*, *"¿Cuánto queda de temporizador?"* o *"Cancela la alarma"*
 * **Analizar la pantalla:** Pulsa el icono de la cámara 📸 y escribe *"¿Qué error se ve en esta pantalla?"*
 * **Bloquear escritorio:** *"Bloquea la sesión"*

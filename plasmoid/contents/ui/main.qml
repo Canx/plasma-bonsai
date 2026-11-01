@@ -23,6 +23,10 @@ PlasmoidItem {
     property bool isBusy: false
     property bool isRecordingVoice: false
     property string capturedImageB64: ""
+    property string attachedFilePath: ""
+    property string attachedFileName: ""
+    property string attachedFileType: ""
+    property string attachedFileText: ""
     property var availableModels: []
     property string currentModel: ""
     property var toolDefinitions: []
@@ -421,22 +425,30 @@ PlasmoidItem {
                 }
             }
 
-            // Vista previa de captura adjunta
+            // Vista previa de archivo o captura adjunta
             RowLayout {
-                visible: root.capturedImageB64 !== ""
+                visible: root.capturedImageB64 !== "" || root.attachedFileName !== ""
                 Layout.fillWidth: true
                 spacing: Kirigami.Units.smallSpacing
 
                 Rectangle {
                     color: Kirigami.Theme.highlightColor
                     radius: 3
-                    implicitWidth: imgBadge.implicitWidth + 8
-                    implicitHeight: imgBadge.implicitHeight + 4
+                    implicitWidth: attachBadge.implicitWidth + 12
+                    implicitHeight: attachBadge.implicitHeight + 6
 
                     PlasmaComponents.Label {
-                        id: imgBadge
+                        id: attachBadge
                         anchors.centerIn: parent
-                        text: "📸 " + i18n("Screenshot ready for analysis")
+                        text: {
+                            if (root.attachedFileType === "document") {
+                                return "📄 " + root.attachedFileName
+                            } else if (root.attachedFileName !== "") {
+                                return "🖼️ " + root.attachedFileName
+                            } else {
+                                return "📸 " + i18n("Screenshot ready for analysis")
+                            }
+                        }
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
                         color: Kirigami.Theme.highlightedTextColor
                     }
@@ -445,7 +457,9 @@ PlasmoidItem {
                 PlasmaComponents.ToolButton {
                     icon.name: "dialog-close"
                     display: PlasmaComponents.AbstractButton.IconOnly
-                    onClicked: root.capturedImageB64 = ""
+                    ToolTip.text: i18n("Remove attachment")
+                    ToolTip.visible: hovered
+                    onClicked: root.clearAttachment()
                 }
             }
 
@@ -491,6 +505,15 @@ PlasmoidItem {
                     onClicked: root.requestScreenshot()
                 }
 
+                PlasmaComponents.ToolButton {
+                    id: attachBtn
+                    icon.name: "mail-attachment"
+                    ToolTip.text: (root.preferredLanguage === "es") ? "Adjuntar archivo o documento (PDF, código, texto, imagen)" : i18n("Attach file or document (PDF, code, text, image)")
+                    ToolTip.visible: hovered
+                    enabled: !root.isBusy && !root.isRecordingVoice
+                    onClicked: root.requestAttachFile()
+                }
+
                 PlasmaComponents.TextField {
                     id: promptInput
                     Layout.fillWidth: true
@@ -498,7 +521,7 @@ PlasmoidItem {
                     enabled: !root.isBusy && !root.isRecordingVoice
                     onAccepted: {
                         var val = promptInput.text.trim()
-                        if (val !== "" || root.capturedImageB64 !== "") {
+                        if (val !== "" || root.capturedImageB64 !== "" || root.attachedFileName !== "") {
                             root.sendMessage(val)
                             promptInput.text = ""
                         }
@@ -509,10 +532,10 @@ PlasmoidItem {
                     id: sendBtn
                     icon.name: "document-send"
                     text: i18n("Send")
-                    enabled: !root.isBusy && (promptInput.text.length > 0 || root.capturedImageB64 !== "")
+                    enabled: !root.isBusy && (promptInput.text.trim().length > 0 || root.capturedImageB64 !== "" || root.attachedFileName !== "")
                     onClicked: {
                         var val = promptInput.text.trim()
-                        if (val !== "" || root.capturedImageB64 !== "") {
+                        if (val !== "" || root.capturedImageB64 !== "" || root.attachedFileName !== "") {
                             root.sendMessage(val)
                             promptInput.text = ""
                         }
@@ -746,7 +769,7 @@ PlasmoidItem {
     function copyToClipboard(text) {
         if (!text) return
         var safe = text.replace(/'/g, "'\\''")
-        root.runCli("printf '%s' '" + safe + "' | wl-copy 2>/dev/null || printf '%s' '" + safe + "' | xclip -selection clipboard 2>/dev/null", null)
+        root.runCli("python3 '" + root.toolsScriptPath + "' clipboard set '" + safe + "'", null)
     }
 
     function startOllamaService() {
@@ -883,11 +906,20 @@ PlasmoidItem {
     function clearChat() {
         chatModel.clear()
         root.conversationHistory = []
+        root.clearAttachment()
         chatModel.append({
             "role": "welcome",
             "text": root.getClearedMessage(),
             "toolInfo": ""
         })
+    }
+
+    function clearAttachment() {
+        root.attachedFilePath = ""
+        root.attachedFileName = ""
+        root.attachedFileType = ""
+        root.attachedFileText = ""
+        root.capturedImageB64 = ""
     }
 
     function requestScreenshot() {
@@ -896,33 +928,86 @@ PlasmoidItem {
             root.isBusy = false
             var b64 = (stdout || "").trim()
             if (b64.length > 100) {
+                root.attachedFileType = "image"
+                root.attachedFileName = ""
+                root.attachedFilePath = "/tmp/bonsai_screenshot.png"
+                root.attachedFileText = ""
                 root.capturedImageB64 = b64
+            }
+        })
+    }
+
+    function requestAttachFile() {
+        root.isBusy = true
+        root.runCli("python3 '" + root.toolsScriptPath + "' pick_file", (code, stdout) => {
+            root.isBusy = false
+            if (code !== 0 || !stdout || stdout.trim() === "") return
+            try {
+                var res = JSON.parse(stdout.trim())
+                if (res.cancelled) return
+                if (res.success) {
+                    if (res.type === "image") {
+                        root.attachedFileType = "image"
+                        root.attachedFileName = res.filename || "image"
+                        root.attachedFilePath = res.path || ""
+                        root.attachedFileText = ""
+                        root.capturedImageB64 = res.base64_image || ""
+                    } else {
+                        root.attachedFileType = "document"
+                        root.attachedFileName = res.filename || "file"
+                        root.attachedFilePath = res.path || ""
+                        root.attachedFileText = res.text || ""
+                        root.capturedImageB64 = ""
+                    }
+                }
+            } catch (e) {
+                console.warn("Error parsing attached file: " + e)
             }
         })
     }
 
     function sendMessage(text) {
         text = (text || "").trim()
-        if (text === "" && root.capturedImageB64 === "") {
+        var hasDoc = (root.attachedFileType === "document" && root.attachedFileText !== "")
+        var hasImg = (root.capturedImageB64 !== "")
+        if (text === "" && !hasImg && !hasDoc) {
             return
         }
 
-        var userDisplayText = text !== "" ? text : i18n("[Screenshot attached]")
+        var userDisplayText = text
+        if (hasDoc) {
+            var docPrefix = "📄 **[" + root.attachedFileName + "]**\n"
+            userDisplayText = docPrefix + (text !== "" ? text : i18n("Please analyze or summarize this document."))
+        } else if (hasImg && text === "") {
+            userDisplayText = (root.attachedFileName !== "") ? ("🖼️ **[" + root.attachedFileName + "]**") : i18n("[Screenshot attached]")
+        }
+
         chatModel.append({
             "role": "user",
             "text": userDisplayText,
             "toolInfo": ""
         })
 
+        var userMessageContent = text
+        if (hasDoc) {
+            userMessageContent = "Documento adjunto: '" + root.attachedFileName + "'\nRuta: " + root.attachedFilePath + "\n"
+                                 + "--- Contenido del archivo ---\n"
+                                 + root.attachedFileText + "\n"
+                                 + "--- Fin del contenido ---\n\n"
+                                 + (text !== "" ? text : "Por favor resume y analiza el contenido de este documento adjunto.")
+        } else if (hasImg && text === "") {
+            userMessageContent = "Por favor analiza la imagen adjunta."
+        }
+
         var userMessageObj = {
             "role": "user",
-            "content": text !== "" ? text : "Por favor analiza la captura de pantalla adjunta."
+            "content": userMessageContent
         }
-        if (root.capturedImageB64 !== "") {
+        if (hasImg) {
             userMessageObj["images"] = [root.capturedImageB64]
         }
         root.conversationHistory.push(userMessageObj)
-        root.capturedImageB64 = ""
+        root.clearAttachment()
         root.isBusy = true
 
         var assistantIndex = chatModel.count
@@ -939,9 +1024,9 @@ PlasmoidItem {
 
         var systemContent = ""
         if (activeLang === "en") {
-            systemContent = "You are Bonsai, a smart local AI assistant integrated into the KDE Plasma 6 desktop. You have access to system tools to interact with the environment: control brightness, volume, timers, launch applications, lock session, organize windows, create folders in the file system, and find or open documents/files on the computer. When the user asks you to perform an action or find a file, always invoke the appropriate tool immediately.\nIMPORTANT: Always reply to the user strictly in English."
+            systemContent = "You are Bonsai, a smart local AI assistant integrated into the KDE Plasma 6 desktop. You have access to system tools to interact with the environment: control brightness, volume, timers, launch applications, lock session, organize windows, create folders in the file system, find or open documents/files on the computer, read file contents (PDF, text, code), and manage the clipboard. When the user asks you to perform an action or read/find a file, always invoke the appropriate tool immediately.\nIMPORTANT: Always reply to the user strictly in English."
         } else {
-            systemContent = "Eres Bonsai, un asistente local inteligente integrado en el escritorio KDE Plasma 6. Tienes acceso a herramientas del sistema para interactuar con el entorno: controlar brillo, volumen, temporizadores, abrir aplicaciones, bloquear sesión, organizar ventanas, crear carpetas en el sistema de archivos y buscar o abrir documentos/archivos en el equipo. Si el usuario te pide buscar un documento y abrirlo (o cualquier acción del sistema), invoca siempre la herramienta adecuada de inmediato.\nIMPORTANTE: Responde siempre al usuario estrictamente en español."
+            systemContent = "Eres Bonsai, un asistente local inteligente integrado en el escritorio KDE Plasma 6. Tienes acceso a herramientas del sistema para interactuar con el entorno: controlar brillo, volumen, temporizadores, abrir aplicaciones, bloquear sesión, organizar ventanas, crear carpetas en el sistema de archivos, buscar o abrir documentos/archivos en el equipo, leer contenido de archivos (PDF, texto, código) y gestionar el portapapeles. Si el usuario te pide una acción o leer/buscar un documento, invoca siempre la herramienta adecuada de inmediato.\nIMPORTANTE: Responde siempre al usuario estrictamente en español."
         }
 
         var customPrompt = (Plasmoid.configuration && Plasmoid.configuration.customSystemPrompt) ? Plasmoid.configuration.customSystemPrompt.trim() : ""
@@ -1041,6 +1126,9 @@ PlasmoidItem {
                                     // Si el asistente no dijo nada de texto, poner el mensaje de la herramienta
                                     if (chatModel.get(assistantIndex).text === "") {
                                         chatModel.setProperty(assistantIndex, "text", info)
+                                    }
+                                    if (root.conversationHistory.length > 0 && root.conversationHistory[root.conversationHistory.length - 1].role === "assistant") {
+                                        root.conversationHistory[root.conversationHistory.length - 1].content = chatModel.get(assistantIndex).text
                                     }
                                 } catch (e) {}
                             })

@@ -130,6 +130,66 @@ def lock_screen():
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+def optimize_image_to_base64(path, max_dim=1920, quality=85):
+    """
+    Optimiza y comprime una imagen local antes de enviarla al modelo de visión (Ollama).
+    - Aplica downscale manteniendo la relación de aspecto para no exceder max_dim px.
+    - Convierte a JPEG con compresión óptima (85%), reduciendo el uso de VRAM y tiempo de inferencia.
+    - Soporta Pillow con fallback a ffmpeg y fallback final a codificación directa.
+    """
+    try:
+        # 1. Probar Pillow (PIL)
+        try:
+            import io
+            from PIL import Image
+            with Image.open(path) as img:
+                if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                    bg = Image.new('RGB', img.size, (255, 255, 255))
+                    if img.mode != 'RGBA':
+                        img = img.convert('RGBA')
+                    bg.paste(img, mask=img.split()[3])
+                    img = bg
+                elif img.mode != 'RGB':
+                    img = img.convert('RGB')
+
+                resampling = getattr(Image, 'Resampling', Image).LANCZOS
+                img.thumbnail((max_dim, max_dim), resampling)
+
+                buf = io.BytesIO()
+                img.save(buf, format='JPEG', quality=quality, optimize=True)
+                return base64.b64encode(buf.getvalue()).decode('utf-8')
+        except Exception:
+            pass
+
+        # 2. Fallback con ffmpeg
+        ffmpeg = get_bin(["ffmpeg"])
+        if ffmpeg:
+            try:
+                tmp_out = "/tmp/bonsai_opt.jpg"
+                if os.path.exists(tmp_out):
+                    try:
+                        os.remove(tmp_out)
+                    except Exception:
+                        pass
+                cmd = [
+                    ffmpeg, "-y", "-i", path,
+                    "-vf", f"scale='min({max_dim},iw)':-1",
+                    "-q:v", "3",
+                    tmp_out
+                ]
+                subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if os.path.exists(tmp_out):
+                    with open(tmp_out, "rb") as f:
+                        return base64.b64encode(f.read()).decode("utf-8")
+            except Exception:
+                pass
+
+        # 3. Fallback directo
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode("utf-8")
+    except Exception:
+        return ""
+
 def take_screenshot(mode="fullscreen"):
     out_path = "/tmp/bonsai_screenshot.png"
     try:
@@ -142,8 +202,9 @@ def take_screenshot(mode="fullscreen"):
         if not os.path.exists(out_path):
             return {"success": False, "error": "No se pudo generar la captura"}
 
-        with open(out_path, "rb") as f:
-            b64 = base64.b64encode(f.read()).decode("utf-8")
+        b64 = optimize_image_to_base64(out_path, max_dim=1920, quality=85)
+        if not b64:
+            return {"success": False, "error": "No se pudo procesar la imagen optimizada"}
 
         return {
             "success": True,
@@ -469,8 +530,13 @@ def open_file(path):
 
         p = os.path.expanduser(os.path.expandvars(path.strip()))
         if not os.path.isabs(p):
-            p = os.path.join(os.path.expanduser("~"), p)
-        norm_path = os.path.abspath(p)
+            cwd_path = os.path.abspath(p)
+            if os.path.exists(cwd_path):
+                norm_path = cwd_path
+            else:
+                norm_path = os.path.abspath(os.path.join(os.path.expanduser("~"), p))
+        else:
+            norm_path = os.path.abspath(p)
 
         if not os.path.exists(norm_path):
             return {"success": False, "error": f"El archivo no existe: {norm_path}"}
@@ -484,6 +550,125 @@ def open_file(path):
         }
     except Exception as e:
         return {"success": False, "error": f"Error al abrir archivo: {str(e)}"}
+
+def read_file_content(path, max_chars=15000):
+    """Lee el contenido textual de un archivo local (PDF, texto, código, markdown, json, logs) o devuelve base64 si es imagen."""
+    try:
+        if not path or not isinstance(path, str):
+            return {"success": False, "error": "Ruta no válida o vacía"}
+
+        p = os.path.expanduser(os.path.expandvars(path.strip()))
+        if not os.path.isabs(p):
+            cwd_path = os.path.abspath(p)
+            if os.path.exists(cwd_path):
+                norm_path = cwd_path
+            else:
+                norm_path = os.path.abspath(os.path.join(os.path.expanduser("~"), p))
+        else:
+            norm_path = os.path.abspath(p)
+
+        if not os.path.exists(norm_path):
+            return {"success": False, "error": f"El archivo no existe: {norm_path}"}
+        if os.path.isdir(norm_path):
+            return {"success": False, "error": f"La ruta especificada es un directorio, no un archivo: {norm_path}"}
+
+        filename = os.path.basename(norm_path)
+        size = os.path.getsize(norm_path)
+        ext = os.path.splitext(norm_path)[1].lower()
+
+        # Imágenes (multimodal)
+        if ext in [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"]:
+            b64 = optimize_image_to_base64(norm_path, max_dim=1920, quality=85)
+            if not b64:
+                with open(norm_path, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode("utf-8")
+            return {
+                "success": True,
+                "type": "image",
+                "filename": filename,
+                "path": norm_path,
+                "size": size,
+                "base64_image": b64,
+                "message": tr(f"Image '{filename}' ready for analysis", f"Imagen '{filename}' lista para análisis multimodal")
+            }
+
+        # Documentos PDF
+        if ext == ".pdf":
+            pdftotext = get_bin(["pdftotext"])
+            if pdftotext:
+                try:
+                    txt = subprocess.check_output([pdftotext, "-layout", norm_path, "-"], text=True, stderr=subprocess.DEVNULL)
+                except Exception:
+                    txt = subprocess.check_output([pdftotext, norm_path, "-"], text=True, stderr=subprocess.DEVNULL)
+            else:
+                return {
+                    "success": False,
+                    "error": "Para leer documentos PDF se requiere 'poppler-utils' (pdftotext)."
+                }
+
+            txt = txt.strip()
+            truncated = len(txt) > max_chars
+            text_slice = txt[:max_chars]
+            preview = text_slice[:1000] + ("..." if len(text_slice) > 1000 else "")
+            return {
+                "success": True,
+                "type": "document",
+                "filename": filename,
+                "path": norm_path,
+                "size": size,
+                "text": text_slice,
+                "truncated": truncated,
+                "total_chars": len(txt),
+                "message": tr(
+                    f"PDF document '{filename}' read ({len(txt)} chars):\n```\n{preview}\n```",
+                    f"Documento PDF '{filename}' leído ({len(txt)} caracteres):\n```\n{preview}\n```"
+                )
+            }
+
+        # Archivos de texto plano / código fuente / logs / JSON / YAML / Markdown
+        try:
+            with open(norm_path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read(max_chars + 1)
+        except Exception as e:
+            return {"success": False, "error": f"No se pudo leer el archivo: {str(e)}"}
+
+        truncated = len(content) > max_chars
+        text_slice = content[:max_chars]
+        preview = text_slice[:1000] + ("..." if len(text_slice) > 1000 else "")
+        return {
+            "success": True,
+            "type": "document",
+            "filename": filename,
+            "path": norm_path,
+            "size": size,
+            "text": text_slice,
+            "truncated": truncated,
+            "total_chars": len(content),
+            "message": tr(
+                f"File '{filename}' read ({len(text_slice)} chars):\n```\n{preview}\n```",
+                f"Archivo '{filename}' leído ({len(text_slice)} caracteres):\n```\n{preview}\n```"
+            )
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Error al procesar archivo: {str(e)}"}
+
+def pick_file():
+    """Abre el diálogo nativo de KDE Plasma para seleccionar un archivo y devuelve su contenido."""
+    try:
+        kdialog = get_bin(["kdialog"])
+        if not kdialog:
+            return {"success": False, "error": "kdialog no está disponible"}
+        filters = "Documentos e imágenes (*.pdf *.txt *.md *.py *.js *.ts *.json *.csv *.html *.png *.jpg *.jpeg *.webp *.log *.sh *.yml *.yaml);;Todos los archivos (*)"
+        out = subprocess.check_output([
+            kdialog, "--getopenfilename", os.path.expanduser("~"), filters
+        ], text=True, stderr=subprocess.DEVNULL).strip()
+        if not out:
+            return {"success": False, "cancelled": True}
+        return read_file_content(out)
+    except subprocess.CalledProcessError:
+        return {"success": False, "cancelled": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 def search_files(query, directory=None, open_first=False, limit=5):
     """Busca archivos o documentos usando Baloo (indexador nativo de KDE) y búsqueda por nombre."""
@@ -564,6 +749,190 @@ def search_files(query, directory=None, open_first=False, limit=5):
         }
     except Exception as e:
         return {"success": False, "error": f"Error en la búsqueda: {str(e)}"}
+
+# -------------------------------------------------------------
+# Gestión del Portapapeles y Selección (KDE Klipper)
+# -------------------------------------------------------------
+def get_clipboard():
+    """Obtiene el texto actual copiado en el portapapeles de KDE Plasma (Klipper)."""
+    try:
+        text = ""
+        # 1. Intentar primero vía Klipper D-Bus nativo
+        try:
+            out = subprocess.check_output([
+                QDBUS, "org.kde.klipper", "/klipper",
+                "org.kde.klipper.klipper.getClipboardContents"
+            ], text=True, stderr=subprocess.DEVNULL)
+            text = out.strip()
+        except Exception:
+            text = ""
+
+        # 2. Fallback a wl-paste o xclip si fuera necesario
+        if not text:
+            wl_paste = get_bin(["wl-paste"])
+            if wl_paste:
+                try:
+                    out = subprocess.check_output([wl_paste, "--no-newline"], text=True, stderr=subprocess.DEVNULL)
+                    text = out.strip()
+                except Exception:
+                    pass
+
+        if not text:
+            xclip = get_bin(["xclip", "xsel"])
+            if xclip:
+                try:
+                    cmd = [xclip, "-selection", "clipboard", "-o"] if "xclip" in xclip else [xclip, "-b"]
+                    out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+                    text = out.strip()
+                except Exception:
+                    pass
+
+        if not text:
+            return {
+                "success": True,
+                "text": "",
+                "message": tr("The clipboard is currently empty.", "El portapapeles está actualmente vacío.")
+            }
+
+        preview = text[:1500] + ("\n... [truncado]" if len(text) > 1500 else "")
+        header = tr(f"📋 Clipboard content ({len(text)} characters):", f"📋 Contenido del portapapeles ({len(text)} caracteres):")
+        return {
+            "success": True,
+            "text": text,
+            "preview": preview,
+            "length": len(text),
+            "source": "clipboard",
+            "message": f"{header}\n\n```\n{preview}\n```"
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Error al leer portapapeles: {str(e)}"}
+
+def get_selection():
+    """Obtiene el texto actualmente seleccionado/resaltado en pantalla (selección primaria)."""
+    try:
+        # En Wayland: wl-paste --primary
+        wl_paste = get_bin(["wl-paste"])
+        if wl_paste:
+            try:
+                out = subprocess.check_output([wl_paste, "--primary", "--no-newline"], text=True, stderr=subprocess.DEVNULL)
+                text = out.strip()
+                if text:
+                    preview = text[:1500] + ("\n... [truncado]" if len(text) > 1500 else "")
+                    header = tr(f"📋 Selected text on screen ({len(text)} characters):", f"📋 Texto seleccionado en pantalla ({len(text)} caracteres):")
+                    return {
+                        "success": True,
+                        "text": text,
+                        "preview": preview,
+                        "length": len(text),
+                        "source": "primary_selection",
+                        "message": f"{header}\n\n```\n{preview}\n```"
+                    }
+            except Exception:
+                pass
+
+        # En X11 / XWayland: xclip -selection primary -o o xsel -p
+        xclip = get_bin(["xclip", "xsel"])
+        if xclip:
+            try:
+                cmd = [xclip, "-selection", "primary", "-o"] if "xclip" in xclip else [xclip, "-p"]
+                out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+                text = out.strip()
+                if text:
+                    preview = text[:1500] + ("\n... [truncado]" if len(text) > 1500 else "")
+                    header = tr(f"📋 Selected text on screen ({len(text)} characters):", f"📋 Texto seleccionado en pantalla ({len(text)} caracteres):")
+                    return {
+                        "success": True,
+                        "text": text,
+                        "preview": preview,
+                        "length": len(text),
+                        "source": "primary_selection",
+                        "message": f"{header}\n\n```\n{preview}\n```"
+                    }
+            except Exception:
+                pass
+
+        # Si no hay selección primaria disponible o no están instalados wl-clipboard / xclip, recurrir al portapapeles
+        cb = get_clipboard()
+        if cb.get("success") and cb.get("text"):
+            cb["source"] = "clipboard_fallback"
+            note = tr(
+                "\n\n*(Note: Showing clipboard contents. For instant mouse selection without copying under Wayland, install 'wl-clipboard')*",
+                "\n\n*(Nota: Mostrando contenido del portapapeles. Para capturar selección con el ratón sin pulsar copiar en Wayland, se recomienda 'wl-clipboard')*"
+            )
+            cb["message"] += note
+        return cb
+    except Exception as e:
+        return {"success": False, "error": f"Error al leer selección: {str(e)}"}
+
+def set_clipboard(text):
+    """Copia un texto nuevo al portapapeles del sistema (KDE Klipper)."""
+    try:
+        s = str(text or "")
+        subprocess.check_call([
+            QDBUS, "org.kde.klipper", "/klipper",
+            "org.kde.klipper.klipper.setClipboardContents", s
+        ], stderr=subprocess.DEVNULL)
+        preview = s[:60].replace("\n", " ") + ("..." if len(s) > 60 else "")
+        return {
+            "success": True,
+            "message": tr(f"✅ Copied to clipboard: '{preview}'", f"✅ Copiado al portapapeles: '{preview}'")
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Error al copiar al portapapeles: {str(e)}"}
+
+def clear_clipboard():
+    """Limpia el contenido del portapapeles."""
+    try:
+        subprocess.check_call([
+            QDBUS, "org.kde.klipper", "/klipper",
+            "org.kde.klipper.klipper.clearClipboardContents"
+        ], stderr=subprocess.DEVNULL)
+        return {
+            "success": True,
+            "message": tr("🗑️ Clipboard cleared successfully.", "🗑️ Portapapeles vaciado correctamente.")
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Error al vaciar portapapeles: {str(e)}"}
+
+def get_clipboard_history(limit=5):
+    """Consulta los últimos elementos del historial de Klipper."""
+    try:
+        limit = max(1, min(20, int(limit)))
+        out = subprocess.check_output([
+            QDBUS, "org.kde.klipper", "/klipper",
+            "org.kde.klipper.klipper.getClipboardHistoryMenu"
+        ], text=True, stderr=subprocess.DEVNULL)
+        raw_items = [line.strip() for line in out.splitlines() if line.strip()]
+        seen = set()
+        items = []
+        for it in raw_items:
+            if it not in seen:
+                seen.add(it)
+                items.append(it)
+            if len(items) >= limit:
+                break
+
+        if not items:
+            return {
+                "success": True,
+                "history": [],
+                "message": tr("Clipboard history is empty.", "El historial del portapapeles está vacío.")
+            }
+
+        formatted = []
+        for i, it in enumerate(items):
+            preview = it[:60].replace("\n", " ") + ("..." if len(it) > 60 else "")
+            formatted.append(f"{i+1}. `{preview}`")
+
+        msg = tr("📋 Recent clipboard history:\n", "📋 Historial reciente del portapapeles:\n") + "\n".join(formatted)
+        return {
+            "success": True,
+            "count": len(items),
+            "history": items,
+            "message": msg
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Error al consultar historial: {str(e)}"}
 
 # -------------------------------------------------------------
 # Gestión de Ollama y Servicios
@@ -960,13 +1329,74 @@ def get_tool_definitions(lang=None):
                     "required": ["path"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "read_file_content",
+                "description": "Read the text or content of a local file or document (PDF, Python, JavaScript, Markdown, JSON, text, CSV, logs) for analysis or summary." if is_en else "Lee el texto o contenido de un archivo o documento local (PDF, Python, Markdown, JSON, texto, CSV, logs) para resumirlo o analizarlo.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Absolute or relative path to the file to read (e.g. '~/Documents/report.pdf', 'main.py')" if is_en else "Ruta absoluta o relativa del archivo a leer (ej: '~/Documentos/factura.pdf', 'main.py')"
+                        }
+                    },
+                    "required": ["path"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "manage_clipboard",
+                "description": "Read, check history, copy new text, or clear the system clipboard (KDE Klipper) and mouse selection." if is_en else "Lee el contenido, consulta el historial, copia nuevo texto o limpia el portapapeles de KDE Plasma (Klipper) y la selección de texto en pantalla.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["get", "get_selection", "history", "set", "clear"],
+                            "description": "Action: 'get' (read clipboard), 'get_selection' (read mouse selection), 'history' (view recent items), 'set' (copy new text), 'clear' (empty clipboard)" if is_en else "Acción: 'get' (leer portapapeles), 'get_selection' (leer selección de ratón), 'history' (ver historial copiado), 'set' (copiar texto), 'clear' (vaciar portapapeles)"
+                        },
+                        "text": {
+                            "type": "string",
+                            "description": "Text to copy to the clipboard when action is 'set'" if is_en else "Texto que se copiará al portapapeles cuando la acción sea 'set'"
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Number of history items to return (default 5, max 20) when action is 'history'" if is_en else "Número de elementos del historial a devolver (por defecto 5, máx 20) si la acción es 'history'"
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
         }
     ]
 
 TOOL_DEFINITIONS = get_tool_definitions()
 
 def execute_tool(name, args):
-    if name in ["search_files", "find_files", "search_documents"]:
+    if name in ["manage_clipboard", "clipboard", "portapapeles", "get_clipboard", "clipboard_history"]:
+        act = args.get("action", "get").lower() if isinstance(args.get("action"), str) else "get"
+        if name == "get_clipboard":
+            act = "get"
+        elif name == "clipboard_history":
+            act = "history"
+
+        if act in ["get", "read", "leer", "get_clipboard"]:
+            return get_clipboard()
+        elif act in ["get_selection", "selection", "primary", "seleccion", "selected"]:
+            return get_selection()
+        elif act in ["history", "historial", "list"]:
+            return get_clipboard_history(args.get("limit", 5))
+        elif act in ["set", "copy", "copiar", "write"]:
+            return set_clipboard(args.get("text") or args.get("content") or "")
+        elif act in ["clear", "empty", "vaciar", "limpiar"]:
+            return clear_clipboard()
+        return {"success": False, "error": f"Acción de portapapeles '{act}' no reconocida"}
+    elif name in ["search_files", "find_files", "search_documents"]:
         q = args.get("query") or args.get("name") or args.get("file_name") or args.get("pattern") or ""
         open_first = args.get("open_first", False)
         if "open" in args and args["open"]:
@@ -975,6 +1405,9 @@ def execute_tool(name, args):
     elif name in ["open_file", "open_document", "xdg_open"]:
         p = args.get("path") or args.get("file") or args.get("file_path") or ""
         return open_file(p)
+    elif name in ["read_file_content", "read_file", "inspect_file", "leer_archivo"]:
+        p = args.get("path") or args.get("file") or args.get("file_path") or ""
+        return read_file_content(p)
     elif name in ["create_folder", "create_directory", "mkdir"]:
         path = args.get("path") or args.get("folder_name") or args.get("name") or args.get("directory") or ""
         return create_folder(path)
@@ -1029,6 +1462,11 @@ if __name__ == "__main__":
     elif cmd == "open_file":
         path = sys.argv[2] if len(sys.argv) >= 3 else ""
         print(json.dumps(open_file(path)))
+    elif cmd == "read_file":
+        path = sys.argv[2] if len(sys.argv) >= 3 else ""
+        print(json.dumps(read_file_content(path)))
+    elif cmd == "pick_file":
+        print(json.dumps(pick_file()))
     elif cmd == "start_ollama":
         print(json.dumps(start_ollama()))
     elif cmd == "record":
@@ -1054,6 +1492,34 @@ if __name__ == "__main__":
             print(res.get("base64_image", ""))
         else:
             print("")
+    elif cmd == "clipboard":
+        subcmd = sys.argv[2] if len(sys.argv) >= 3 else "get"
+        is_raw = "--raw" in sys.argv
+        if is_raw:
+            sys.argv.remove("--raw")
+
+        if subcmd == "get":
+            res = get_clipboard()
+            if is_raw:
+                print(res.get("text", ""))
+            else:
+                print(json.dumps(res))
+        elif subcmd in ["selection", "get_selection"]:
+            res = get_selection()
+            if is_raw:
+                print(res.get("text", ""))
+            else:
+                print(json.dumps(res))
+        elif subcmd == "set":
+            text = sys.argv[3] if len(sys.argv) >= 4 else ""
+            print(json.dumps(set_clipboard(text)))
+        elif subcmd == "history":
+            lim = int(sys.argv[3]) if len(sys.argv) >= 4 else 5
+            print(json.dumps(get_clipboard_history(lim)))
+        elif subcmd in ["clear", "empty"]:
+            print(json.dumps(clear_clipboard()))
+        else:
+            print(json.dumps({"error": f"Subcomando de portapapeles desconocido: {subcmd}"}))
     elif cmd == "call":
         if len(sys.argv) < 3:
             print(json.dumps({"error": "No tool name"}))
