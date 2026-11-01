@@ -8,7 +8,7 @@ A native, lightweight, and 100% private AI assistant widget for [b]KDE Plasma 6[
 [*] [b]🔒 100% Local & Private:[/b] Connects directly to Ollama at [i]http://localhost:11434[/i]. Zero telemetry, zero tracking, no cloud dependencies or external API keys.
 [*] [b]⚡ Standalone & Daemonless:[/b] Runs purely in user space. No heavy background daemon consuming RAM 24/7.
 [*] [b]🎨 Native Qt6 & Kirigami UI:[/b] Real-time token streaming with animated typing indicator, rich text rendering, quick copy button, and Ollama model switcher.
-[*] [b]📸 Multimodal Desktop Vision:[/b] Integrated screenshot tool via Spectacle to analyze windows, code errors, or graphics using vision models (llava, bonsai-2, qwen2.5-vl).
+[*] [b]📸 Multimodal Desktop Vision:[/b] Integrated screenshot tool via Spectacle to analyze windows, code errors, or graphics using the vision model (bonsai-2:latest).
 [*] [b]🛠️ System Control & Actions (Natural Language Tool Calling):[/b]
 [list]
 [*] [b]Screen Brightness:[/b] Adjust or set exact percentage ([i]"Set brightness to 60%"[/i]).

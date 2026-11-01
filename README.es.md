@@ -7,7 +7,7 @@
 
 **Español** | [English](README.md)
 
-**Plasma Bonsai Assistant** es un widget (*Plasmoid*) nativo para el entorno de escritorio **KDE Plasma 6** que integra modelos de lenguaje locales ejecutados en **Ollama** (como `bonsai-2`, `qwen2.5`, `llama3.1`, `gemma2`) directamente en tu panel o escritorio, con capacidades de **visión multimodal** y **control del sistema**.
+**Plasma Bonsai Assistant** es un widget (*Plasmoid*) nativo para el entorno de escritorio **KDE Plasma 6** que integra el modelo local **`bonsai-2:latest`** ejecutado en **Ollama** directamente en tu panel o escritorio, con capacidades de **visión multimodal** y **control del sistema**.
 
 Funciona **100% en espacio de usuario**: no requiere demonios permanentes en segundo plano, puertos intermedios abiertos ni permisos de administrador.
 
@@ -26,7 +26,7 @@ Funciona **100% en espacio de usuario**: no requiere demonios permanentes en seg
   * Renderizado enriquecido de **Markdown** (negritas, cursivas, listas, código).
   * Botón para **copiar respuestas al portapapeles** con un solo clic.
   * Selector desplegable para cambiar de modelo al vuelo.
-* 📸 **Visión Multimodal del Escritorio:** Captura instantánea de pantalla con Spectacle para analizar ventanas, código o errores visuales con modelos con soporte de visión.
+* 📸 **Visión Multimodal del Escritorio:** Captura instantánea de pantalla con Spectacle para analizar ventanas, código o errores visuales con el modelo `bonsai-2:latest`.
 * 🛠️ **Acciones del Sistema (Tool Calling):**
   * **Brillo de pantalla:** Consulta y ajuste porcentual a través de `org.kde.Solid.PowerManagement`.
   * **Audio del sistema:** Consulta, ajuste de volumen y silencio mediante PulseAudio / PipeWire.
@@ -102,12 +102,9 @@ plasma-bonsai/
      ```bash
      curl -fsSL https://ollama.ai/install.sh | sh
      ```
-   * Descarga el modelo recomendado Bonsai (u otros modelos de tu preferencia):
+   * Descarga el modelo Bonsai:
      ```bash
      ollama pull bonsai-2:latest
-     # Otras excelentes alternativas:
-     ollama pull qwen2.5:7b
-     ollama pull llama3.1:8b
      ```
 
 ---

@@ -55,8 +55,8 @@ msgstr "Inícialo ejecutando 'ollama serve' en una terminal."
 msgid "⚠️ No models downloaded in Ollama"
 msgstr "⚠️ No hay modelos descargados en Ollama"
 
-msgid "Download a model: 'ollama pull bonsai-2' or 'ollama pull qwen2.5'"
-msgstr "Descarga un modelo: 'ollama pull bonsai-2' o 'ollama pull qwen2.5'"
+msgid "Download the model: 'ollama pull bonsai-2:latest'"
+msgstr "Descarga el modelo: 'ollama pull bonsai-2:latest'"
 
 msgid "Action executed"
 msgstr "Acción ejecutada"

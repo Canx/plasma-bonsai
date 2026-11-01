@@ -12,7 +12,7 @@ A native, lightweight, and 100% private AI assistant widget for **KDE Plasma 6**
   * Rich Markdown rendering (headers, formatted lists, code blocks).
   * Quick copy-to-clipboard button.
   * Model switcher dropdown to toggle between your installed Ollama models.
-* 📸 **Multimodal Desktop Vision:** Integrated screenshot tool (via Spectacle) to analyze code errors, images, and desktop windows using vision models (`llava`, `bonsai-2`, `qwen2.5-vl`).
+* 📸 **Multimodal Desktop Vision:** Integrated screenshot tool (via Spectacle) to analyze code errors, images, and desktop windows using the vision model (`bonsai-2:latest`).
 * 🛠️ **System Control & Actions (Natural Language Tool Calling):**
   * **Screen Brightness:** Adjust or set exact percentage (*"Set brightness to 60%"*).
   * **Audio Control:** Adjust volume or mute/unmute audio.

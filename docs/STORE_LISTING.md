@@ -41,7 +41,7 @@ Runs purely in user space. No heavy background daemon consuming RAM 24/7.
 Real-time token streaming with animated typing indicator, rich text rendering, quick copy button, and Ollama model switcher.
 
 📸 Multimodal Desktop Vision:
-Integrated screenshot tool via Spectacle to analyze windows, code errors, or graphics using vision models (llava, bonsai-2, qwen2.5-vl).
+Integrated screenshot tool via Spectacle to analyze windows, code errors, or graphics using the vision model (bonsai-2:latest).
 
 🛠️ System Control & Actions (Tool Calling):
 • Screen Brightness: Adjust or set exact percentage ("Set brightness to 60%")

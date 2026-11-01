@@ -220,7 +220,7 @@ PlasmoidItem {
                             wrapMode: Text.Wrap
                             text: !root.ollamaConnected 
                                   ? i18n("Click the button to start Ollama or run 'ollama serve'.")
-                                  : i18n("Download a model: 'ollama pull bonsai-2:latest' or 'ollama pull qwen2.5'")
+                                  : i18n("Download the model: 'ollama pull bonsai-2:latest'")
                         }
                     }
 
@@ -857,7 +857,7 @@ PlasmoidItem {
                                 }
                             }
                             if (root.currentModel === "" || names.indexOf(root.currentModel) === -1) {
-                                // Preferir modelos de la familia bonsai o qwen si existen
+                                // Preferir el modelo de la familia bonsai si existe
                                 var preferred = names[0]
                                 for (var k = 0; k < names.length; k++) {
                                     if (names[k].indexOf("bonsai") !== -1) {

@@ -7,7 +7,7 @@
 
 [Español](README.es.md) | **English**
 
-**Plasma Bonsai Assistant** is a native widget (*Plasmoid*) for **KDE Plasma 6** that integrates local Large Language Models powered by **Ollama** (such as `qwen2.5`, `llama3.1`, `bonsai-2`, `gemma2`) directly into your desktop panel or desktop view, featuring **multimodal desktop vision**, **bilingual localization**, and **natural language system actions**.
+**Plasma Bonsai Assistant** is a native widget (*Plasmoid*) for **KDE Plasma 6** that integrates the **`bonsai-2:latest`** local model powered by **Ollama** directly into your desktop panel or desktop view, featuring **multimodal desktop vision**, **bilingual localization**, and **natural language system actions**.
 
 Built **100% in user space**: no persistent resident background daemons, no intermediate open network ports, and no root permissions required.
 
@@ -26,7 +26,7 @@ Built **100% in user space**: no persistent resident background daemons, no inte
   * Rich **Markdown** rendering (headers, bold, italics, lists, code blocks).
   * Quick **copy-to-clipboard** button on assistant messages.
   * Dropdown selector to switch between local Ollama models on the fly.
-* 📸 **Multimodal Desktop Vision:** Integrated screenshot tool using Spectacle to analyze windows, code snippets, or error dialogs with vision-capable models (e.g., `llava`, `bonsai-2`, `qwen2.5-vl`).
+* 📸 **Multimodal Desktop Vision:** Integrated screenshot tool using Spectacle to analyze windows, code snippets, or error dialogs with vision-capable models (`bonsai-2:latest`).
 * 🛠️ **System Control & Actions (Tool Calling):**
   * **Screen Brightness:** Query and adjust exact percentage via `org.kde.Solid.PowerManagement`.
   * **Audio Control:** Query, adjust volume, and mute/unmute via PipeWire / PulseAudio.
@@ -102,12 +102,9 @@ plasma-bonsai/
      ```bash
      curl -fsSL https://ollama.ai/install.sh | sh
      ```
-   * Pull the recommended Bonsai model (or your preferred models):
+   * Pull the Bonsai model:
      ```bash
      ollama pull bonsai-2:latest
-     # Other great alternatives:
-     ollama pull qwen2.5:7b
-     ollama pull llama3.1:8b
      ```
 
 ---
