@@ -13,7 +13,7 @@
         "Id": "com.github.canx.plasma-bonsai",
         "Name": "Plasma Bonsai Assistant",
         "Name[es]": "Asistente Plasma Bonsai",
-        "Version": "1.0.1",
+        "Version": "1.0.2",
         "Website": "https://github.com/Canx/plasma-bonsai"
     },
     "KPackageStructure": "Plasma/Applet",

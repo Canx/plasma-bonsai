@@ -77,5 +77,8 @@ Poder hablar directamente con Bonsai y que responda con voz natural, **100% en l
   - Selector de idioma preferido de respuesta (Automático / Inglés / Español).
   - Instrucciones personalizadas (System Prompt configurable).
   - Botón de ajustes ⚙️ en la cabecera y menú contextual nativo de KDE Plasma.
+- [x] **Fijar ventana en pantalla (Modo Chincheta / Pin 📌) ✅:**
+  - Botón en la cabecera para congelar la ventana del asistente (`hideOnWindowDeactivate: !root.isPinned`).
+  - Previene el cierre involuntario al perder el foco para trabajar en paralelo con otras aplicaciones o seleccionar archivos.
 - [ ] Atajo de teclado global dedicado para invocar a Bonsai (`Meta + Space` o configurable).
 - [ ] Historial de conversaciones guardado entre sesiones (opcional).

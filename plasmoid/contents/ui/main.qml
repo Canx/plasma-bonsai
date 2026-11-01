@@ -22,6 +22,9 @@ PlasmoidItem {
     property bool ollamaConnected: false
     property bool isBusy: false
     property bool isRecordingVoice: false
+    property bool isPinned: false
+    property bool isPickingFile: false
+    hideOnWindowDeactivate: !root.isPinned && !root.isPickingFile
     property string capturedImageB64: ""
     property string attachedFilePath: ""
     property string attachedFileName: ""
@@ -173,6 +176,15 @@ PlasmoidItem {
                         hoverEnabled: true
                         onClicked: root.checkOllamaHealth()
                     }
+                }
+
+                PlasmaComponents.ToolButton {
+                    icon.name: root.isPinned ? "window-pin" : "window-unpin"
+                    text: root.isPinned ? root.tr("Unpin window", "Desanclar ventana") : root.tr("Pin window", "Fijar ventana")
+                    display: PlasmaComponents.AbstractButton.IconOnly
+                    ToolTip.text: root.isPinned ? root.tr("Unpin window (close on outside click)", "Desanclar ventana (se cierra al hacer clic fuera)") : root.tr("Pin window (keep visible on screen)", "Fijar ventana (mantener visible en pantalla)")
+                    ToolTip.visible: hovered
+                    onClicked: root.isPinned = !root.isPinned
                 }
 
                 PlasmaComponents.ToolButton {
@@ -943,9 +955,11 @@ PlasmoidItem {
     }
 
     function requestAttachFile() {
+        root.isPickingFile = true
         root.isBusy = true
         root.runCli("python3 '" + root.toolsScriptPath + "' pick_file", (code, stdout) => {
             root.isBusy = false
+            root.isPickingFile = false
             if (code !== 0 || !stdout || stdout.trim() === "") return
             try {
                 var res = JSON.parse(stdout.trim())

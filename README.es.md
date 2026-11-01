@@ -25,6 +25,7 @@ Funciona **100% en espacio de usuario**: no requiere demonios permanentes en seg
   * Respuestas en tiempo real con **streaming de tokens**.
   * Renderizado enriquecido de **Markdown** (negritas, cursivas, listas, código).
   * Botón para **copiar respuestas al portapapeles** con un solo clic.
+  * **Fijar ventana (Modo Chincheta 📌):** Botón en la cabecera para mantener visible y fija la ventana del asistente mientras trabajas en otras aplicaciones sin que se cierre al perder el foco.
   * Selector desplegable para cambiar de modelo al vuelo.
 * 📸 **Visión Multimodal del Escritorio:** Captura instantánea de pantalla con Spectacle para analizar ventanas, código o errores visuales con el modelo `bonsai-2:latest`.
 * 🛠️ **Acciones del Sistema (Tool Calling):**

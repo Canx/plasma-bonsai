@@ -25,6 +25,7 @@ Built **100% in user space**: no persistent resident background daemons, no inte
   * Real-time token streaming with animated typing indicator.
   * Rich **Markdown** rendering (headers, bold, italics, lists, code blocks).
   * Quick **copy-to-clipboard** button on assistant messages.
+  * **Window Pinning (Sticky Mode 📌):** Pin button in header to keep the assistant window visible and active while working in other apps without auto-hiding.
   * Dropdown selector to switch between local Ollama models on the fly.
 * 📸 **Multimodal Desktop Vision:** Integrated screenshot tool using Spectacle to analyze windows, code snippets, or error dialogs with vision-capable models (`bonsai-2:latest`).
 * 🛠️ **System Control & Actions (Tool Calling):**
