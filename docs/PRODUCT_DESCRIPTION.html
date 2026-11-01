@@ -1,0 +1,43 @@
+<h3>🌿 Plasma Bonsai Assistant</h3>
+<p>A native, lightweight, and 100% private AI assistant widget for <b>KDE Plasma 6</b>. It connects directly to your local <b>Ollama</b> instance to provide fast streaming chat, desktop vision, and deep KDE system integration—right from your panel or desktop.</p>
+
+<hr/>
+
+<h3>✨ Key Features</h3>
+<ul>
+  <li>🔒 <b>100% Local & Private:</b> Connects directly to Ollama (<code>http://localhost:11434</code>). Zero telemetry, zero tracking, no cloud dependencies or API keys.</li>
+  <li>⚡ <b>Standalone & Daemonless:</b> Runs purely in user space. No heavy background daemon consuming RAM 24/7.</li>
+  <li>🎨 <b>Native Qt6 & Kirigami UI:</b> Real-time token streaming with animated typing indicator, rich Markdown rendering, quick copy button, and Ollama model selector.</li>
+  <li>📸 <b>Multimodal Desktop Vision:</b> Integrated screenshot tool via Spectacle to analyze windows, code errors, or graphics using vision models (<code>llava</code>, <code>bonsai-2</code>, <code>qwen2.5-vl</code>).</li>
+  <li>🛠️ <b>System Control & Actions (Natural Language Tool Calling):</b>
+    <ul>
+      <li><b>Screen Brightness:</b> Adjust or set exact percentage (<i>"Set brightness to 60%"</i>).</li>
+      <li><b>Audio Control:</b> Adjust volume or mute/unmute audio.</li>
+      <li><b>Wallpaper:</b> Change Plasma wallpaper on demand.</li>
+      <li><b>Application Launcher:</b> Open terminal, browser, Dolphin, text editor, etc.</li>
+      <li><b>Window Management:</b> Toggle desktop view, overview, or 50/50 window tiling.</li>
+      <li><b>File Operations:</b> Safe folder creation in $HOME and fast document/file search with native KDE Baloo (<i>"Find invoice and open it"</i>).</li>
+      <li><b>Timers:</b> Native KDE notifications with timers (<i>"Set a 10 min timer"</i>).</li>
+      <li><b>Security:</b> Lock desktop session instantly.</li>
+    </ul>
+  </li>
+  <li>⚙️ <b>Integrated Settings:</b> Configure custom Ollama URL, preferred language (Auto / English / Spanish), and custom System Prompt directly in the widget.</li>
+</ul>
+
+<hr/>
+
+<h3>🚀 Requirements</h3>
+<ol>
+  <li><b>KDE Plasma 6</b></li>
+  <li><b>Python 3</b> (included in all modern Linux distributions)</li>
+  <li><b>Ollama</b> running locally:
+    <pre><code>curl -fsSL https://ollama.ai/install.sh | sh
+ollama pull qwen2.5:7b</code></pre>
+  </li>
+</ol>
+
+<hr/>
+
+<h3>💖 Support the Project</h3>
+<p>Plasma Bonsai is 100% free and open-source. If you enjoy using it, consider supporting its development:</p>
+<p>👉 <a href="https://github.com/sponsors/Canx" target="_blank"><b>Sponsor on GitHub</b></a> | <a href="https://github.com/Canx/plasma-bonsai" target="_blank"><b>Source Code & Issues on GitHub</b></a></p>
