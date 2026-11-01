@@ -35,7 +35,12 @@ PlasmoidItem {
     readonly property bool isEnglish: {
         if (root.preferredLanguage === "en") return true
         if (root.preferredLanguage === "es") return false
-        return (Qt.locale().name.indexOf("es") !== 0)
+        var loc = ""
+        try {
+            loc = (Qt.locale() && Qt.locale().name) ? Qt.locale().name.toLowerCase() : ""
+        } catch (e) {}
+        // Si es 'auto', solo usar español si el sistema es explícitamente español; por defecto siempre inglés
+        return (loc.indexOf("es") !== 0)
     }
 
     function tr(enText, esText) {
