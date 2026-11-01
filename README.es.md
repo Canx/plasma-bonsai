@@ -102,11 +102,12 @@ plasma-bonsai/
      ```bash
      curl -fsSL https://ollama.ai/install.sh | sh
      ```
-   * Puedes descargar cualquier modelo con soporte de chat o visión:
+   * Descarga el modelo recomendado Bonsai (u otros modelos de tu preferencia):
      ```bash
+     ollama pull bonsai-2:latest
+     # Otras excelentes alternativas:
      ollama pull qwen2.5:7b
      ollama pull llama3.1:8b
-     ollama pull bonsai-2:latest
      ```
 
 ---

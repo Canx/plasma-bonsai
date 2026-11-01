@@ -102,11 +102,12 @@ plasma-bonsai/
      ```bash
      curl -fsSL https://ollama.ai/install.sh | sh
      ```
-   * Pull your preferred models:
+   * Pull the recommended Bonsai model (or your preferred models):
      ```bash
+     ollama pull bonsai-2:latest
+     # Other great alternatives:
      ollama pull qwen2.5:7b
      ollama pull llama3.1:8b
-     ollama pull bonsai-2:latest
      ```
 
 ---

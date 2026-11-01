@@ -33,7 +33,7 @@ A native, lightweight, and 100% private AI assistant widget for **KDE Plasma 6**
 3. **Ollama** running locally:
    ```bash
    curl -fsSL https://ollama.ai/install.sh | sh
-   ollama pull qwen2.5:7b
+   ollama pull bonsai-2:latest
    ```
 
 ---

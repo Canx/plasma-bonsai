@@ -30,7 +30,7 @@ A native, lightweight, and 100% private AI assistant widget for [b]KDE Plasma 6[
 2. [b]Python 3[/b] (included in all modern Linux distributions)
 3. [b]Ollama[/b] running locally:
 [code]curl -fsSL https://ollama.ai/install.sh | sh
-ollama pull qwen2.5:7b[/code]
+ollama pull bonsai-2:latest[/code]
 
 [hr]
 

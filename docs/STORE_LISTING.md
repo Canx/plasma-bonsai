@@ -64,7 +64,7 @@ Configure custom Ollama URL, preferred language (Auto / English / Spanish), and 
 2. Python 3
 3. Ollama running locally (http://localhost:11434)
    curl -fsSL https://ollama.ai/install.sh | sh
-   ollama pull qwen2.5:7b
+   ollama pull bonsai-2:latest
 
 ━━━━━━━━━━━━━━━━━━━━━
 💖 SUPPORT & LINKS

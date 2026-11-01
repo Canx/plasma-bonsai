@@ -220,7 +220,7 @@ PlasmoidItem {
                             wrapMode: Text.Wrap
                             text: !root.ollamaConnected 
                                   ? i18n("Click the button to start Ollama or run 'ollama serve'.")
-                                  : i18n("Download a model: 'ollama pull bonsai-2' or 'ollama pull qwen2.5'")
+                                  : i18n("Download a model: 'ollama pull bonsai-2:latest' or 'ollama pull qwen2.5'")
                         }
                     }
 
