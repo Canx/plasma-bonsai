@@ -3,7 +3,7 @@ set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLASMOID_DIR="$DIR/plasmoid"
-ID="org.kde.plasma.bonsai"
+ID="com.github.canx.plasma-bonsai"
 
 echo "=== Instalando Plasmoid: $ID (Modo Standalone / Espacio de Usuario) ==="
 
@@ -27,8 +27,26 @@ rm -rf "$HOME/.local/share/$ID"
 # Asegurar permisos de ejecución en scripts empaquetados
 chmod +x "$PLASMOID_DIR/contents/code/tools.py" 2>/dev/null || true
 
+# Instalar iconos del sistema para KDE Plasma
+mkdir -p "$HOME/.local/share/icons/hicolor/scalable/apps" "$HOME/.local/share/icons/hicolor/256x256/apps" 2>/dev/null || true
+cp -f "$PLASMOID_DIR/contents/icons/plasma-bonsai.svg" "$HOME/.local/share/icons/hicolor/scalable/apps/plasma-bonsai.svg" 2>/dev/null || true
+cp -f "$PLASMOID_DIR/contents/icons/plasma-bonsai.png" "$HOME/.local/share/icons/hicolor/256x256/apps/plasma-bonsai.png" 2>/dev/null || true
+
 # Instalar nueva versión
 $TOOL --type Plasma/Applet --install "$PLASMOID_DIR"
+
+# Enlace simbólico de compatibilidad para instancias previas en panel
+LEGACY_ID="org.kde.plasma.bonsai"
+ln -sfn "$HOME/.local/share/plasma/plasmoids/$ID" "$HOME/.local/share/plasma/plasmoids/$LEGACY_ID" 2>/dev/null || true
+
+# Limpiar caché de compilación QML para forzar lectura de cambios
+rm -rf "$HOME/.cache/qmlcache" 2>/dev/null || true
+
+# Reiniciar plasmashell automáticamente si está activo para aplicar cambios en caliente
+if systemctl --user is-active --quiet plasma-plasmashell 2>/dev/null; then
+    echo "↻ Recargando entorno de escritorio Plasma..."
+    systemctl --user restart plasma-plasmashell --no-block 2>/dev/null || true
+fi
 
 # Limpiar servicio systemd anterior si existía (ya no es necesario demonio)
 if [ -f "$HOME/.config/systemd/user/plasma-bonsai.service" ]; then

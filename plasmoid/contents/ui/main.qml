@@ -10,11 +10,15 @@ import org.kde.kirigami as Kirigami
 PlasmoidItem {
     id: root
 
-    Plasmoid.icon: "preferences-system-network-sharing"
+    readonly property string customAppIcon: Qt.resolvedUrl("../icons/plasma-bonsai.svg")
+    Plasmoid.icon: root.customAppIcon
     Plasmoid.title: "Plasma Bonsai Assistant"
 
     // Configuración directa a Ollama (sin demonio)
-    property string ollamaUrl: "http://127.0.0.1:11434"
+    property string ollamaUrl: (Plasmoid.configuration && Plasmoid.configuration.ollamaUrl) ? Plasmoid.configuration.ollamaUrl : "http://127.0.0.1:11434"
+    property string preferredLanguage: (Plasmoid.configuration && Plasmoid.configuration.preferredLanguage) ? Plasmoid.configuration.preferredLanguage : "auto"
+    property string customSystemPrompt: (Plasmoid.configuration && Plasmoid.configuration.customSystemPrompt) ? Plasmoid.configuration.customSystemPrompt : ""
+    property bool showSettings: false
     property bool ollamaConnected: false
     property bool isBusy: false
     property bool isRecordingVoice: false
@@ -105,7 +109,7 @@ PlasmoidItem {
                 spacing: Kirigami.Units.smallSpacing
 
                 Kirigami.Icon {
-                    source: "preferences-system-network-sharing"
+                    source: root.customAppIcon
                     Layout.preferredWidth: Kirigami.Units.iconSizes.small
                     Layout.preferredHeight: Kirigami.Units.iconSizes.small
                 }
@@ -160,10 +164,29 @@ PlasmoidItem {
                     ToolTip.visible: hovered
                     onClicked: root.clearChat()
                 }
+
+                PlasmaComponents.ToolButton {
+                    icon.name: root.showSettings ? "chat" : "configure"
+                    text: root.showSettings ? i18n("Chat") : i18n("Configure")
+                    display: PlasmaComponents.AbstractButton.IconOnly
+                    ToolTip.text: root.showSettings ? i18n("Back to chat") : i18n("Configure Bonsai")
+                    ToolTip.visible: hovered
+                    onClicked: root.showSettings = !root.showSettings
+                }
             }
 
-            // Banner informativo si Ollama está detenido o sin modelos
-            Rectangle {
+            // ==========================================
+            // Vista Principal del Chat
+            // ==========================================
+            ColumnLayout {
+                id: chatViewLayout
+                visible: !root.showSettings
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: Kirigami.Units.smallSpacing
+
+                // Banner informativo si Ollama está detenido o sin modelos
+                Rectangle {
                 visible: !root.ollamaConnected || (root.ollamaConnected && root.availableModels.length === 0)
                 Layout.fillWidth: true
                 implicitHeight: warningRow.implicitHeight + 14
@@ -271,7 +294,7 @@ PlasmoidItem {
                                 spacing: 8
 
                                 Kirigami.Icon {
-                                    source: "preferences-system-network-sharing"
+                                    source: root.customAppIcon
                                     Layout.preferredWidth: Kirigami.Units.iconSizes.small
                                     Layout.preferredHeight: Kirigami.Units.iconSizes.small
                                 }
@@ -439,7 +462,7 @@ PlasmoidItem {
                 }
 
                 PlasmaComponents.Label {
-                    text: i18n("Bonsai is thinking…")
+                    text: root.getThinkingText()
                     font.italic: true
                     opacity: 0.75
                 }
@@ -471,7 +494,7 @@ PlasmoidItem {
                 PlasmaComponents.TextField {
                     id: promptInput
                     Layout.fillWidth: true
-                    placeholderText: root.isRecordingVoice ? i18n("🔴 Listening… Click mic again to send") : i18n("Ask or request an action from Bonsai…")
+                    placeholderText: root.getPlaceholderText()
                     enabled: !root.isBusy && !root.isRecordingVoice
                     onAccepted: {
                         var val = promptInput.text.trim()
@@ -496,7 +519,165 @@ PlasmoidItem {
                     }
                 }
             }
+        } // Fin de chatViewLayout
+
+        // ==========================================
+        // Vista de Configuración Integrada
+        // ==========================================
+        ColumnLayout {
+            id: settingsViewLayout
+            visible: root.showSettings
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: Kirigami.Units.largeSpacing
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+
+                PlasmaComponents.Label {
+                    text: i18n("⚙️ Bonsai Settings")
+                    font.bold: true
+                    font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.15
+                    Layout.fillWidth: true
+                }
+
+                PlasmaComponents.Button {
+                    icon.name: "go-previous"
+                    text: i18n("Back")
+                    onClicked: root.showSettings = false
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                height: 1
+                color: Kirigami.Theme.disabledTextColor
+                opacity: 0.25
+            }
+
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+
+                ColumnLayout {
+                    width: parent.width
+                    spacing: Kirigami.Units.mediumSpacing
+
+                    // 1. Ollama URL
+                    PlasmaComponents.Label {
+                        text: i18n("Ollama Server URL:")
+                        font.bold: true
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Kirigami.Units.smallSpacing
+
+                        PlasmaComponents.TextField {
+                            id: settingsUrlInput
+                            Layout.fillWidth: true
+                            text: root.ollamaUrl
+                            placeholderText: "http://127.0.0.1:11434"
+                        }
+
+                        PlasmaComponents.Button {
+                            text: i18n("Test")
+                            icon.name: "network-connect"
+                            onClicked: {
+                                root.ollamaUrl = settingsUrlInput.text.trim() || "http://127.0.0.1:11434"
+                                root.checkOllamaHealth()
+                            }
+                        }
+                    }
+
+                    // 2. Idioma de Respuesta
+                    PlasmaComponents.Label {
+                        text: i18n("Response Language:")
+                        font.bold: true
+                    }
+
+                    PlasmaComponents.ComboBox {
+                        id: settingsLangCombo
+                        Layout.fillWidth: true
+                        textRole: "text"
+                        model: [
+                            { text: i18n("Automatic (match user input)"), value: "auto" },
+                            { text: i18n("Always English"), value: "en" },
+                            { text: i18n("Always Spanish"), value: "es" }
+                        ]
+                        Component.onCompleted: {
+                            for (var i = 0; i < model.length; i++) {
+                                if (model[i].value === root.preferredLanguage) {
+                                    currentIndex = i
+                                    break
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. System Prompt Personalizado
+                    PlasmaComponents.Label {
+                        text: i18n("Custom Instructions (System Prompt):")
+                        font.bold: true
+                    }
+
+                    PlasmaComponents.TextArea {
+                        id: settingsCustomPromptInput
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Kirigami.Units.gridUnit * 5
+                        text: root.customSystemPrompt
+                        placeholderText: i18n("Optional instructions (e.g. 'Always answer in English, be concise and use bullet points').")
+                        wrapMode: TextEdit.Wrap
+                    }
+
+                    Item { Layout.fillHeight: true }
+
+                    // 4. Botón Guardar
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Kirigami.Units.smallSpacing
+
+                        PlasmaComponents.Button {
+                            icon.name: "dialog-ok-apply"
+                            text: i18n("Save Settings")
+                            Layout.fillWidth: true
+                            onClicked: {
+                                var newUrl = settingsUrlInput.text.trim() || "http://127.0.0.1:11434"
+                                root.ollamaUrl = newUrl
+                                var sel = settingsLangCombo.model[settingsLangCombo.currentIndex]
+                                root.preferredLanguage = sel ? sel.value : "auto"
+                                root.customSystemPrompt = settingsCustomPromptInput.text.trim()
+
+                                if (Plasmoid.configuration) {
+                                    Plasmoid.configuration.ollamaUrl = root.ollamaUrl
+                                    Plasmoid.configuration.preferredLanguage = root.preferredLanguage
+                                    Plasmoid.configuration.customSystemPrompt = root.customSystemPrompt
+                                }
+
+                                if (chatModel.count > 0 && chatModel.get(0).role === "welcome") {
+                                    chatModel.setProperty(0, "text", root.getWelcomeMessage())
+                                }
+
+                                root.checkOllamaHealth()
+                                root.fetchModels()
+                                root.showSettings = false
+                            }
+                        }
+                    }
+
+                    // 5. Apoyar el proyecto / GitHub Sponsors
+                    PlasmaComponents.ToolButton {
+                        text: root.preferredLanguage === "en" ? "💖 Support on GitHub Sponsors" : i18n("💖 Apoyar en GitHub Sponsors")
+                        icon.name: "help-donate"
+                        Layout.fillWidth: true
+                        onClicked: Qt.openUrlExternally("https://github.com/sponsors/Canx")
+                    }
+                }
+            }
         }
+    }
     }
 
     // Comprobación periódica de Ollama
@@ -509,10 +690,52 @@ PlasmoidItem {
         onTriggered: root.checkOllamaHealth()
     }
 
+    function getWelcomeMessage() {
+        if (root.preferredLanguage === "en") {
+            return "Hello! I am Bonsai, your native local assistant for KDE Plasma. I can answer questions, analyze screenshots, or control desktop settings (brightness, volume, notifications, windows) completely offline via Ollama."
+        } else if (root.preferredLanguage === "es") {
+            return "¡Hola! Soy Bonsai, tu asistente local nativo para KDE Plasma. Puedo responder preguntas, analizar capturas de pantalla o controlar el escritorio (brillo, volumen, notificaciones, ventanas) completamente en local mediante Ollama."
+        }
+        return i18n("Hello! I am Bonsai, your native local assistant for KDE Plasma. I can answer questions, analyze screenshots, or control desktop settings (brightness, volume, notifications, windows) completely offline via Ollama.")
+    }
+
+    function getClearedMessage() {
+        if (root.preferredLanguage === "en") {
+            return "Conversation cleared. How can I help you?"
+        } else if (root.preferredLanguage === "es") {
+            return "Conversación reiniciada. ¿En qué te puedo ayudar?"
+        }
+        return i18n("Conversation cleared. How can I help you?")
+    }
+
+    function getPlaceholderText() {
+        if (root.isRecordingVoice) {
+            if (root.preferredLanguage === "en") return "🔴 Listening… Click mic again to send"
+            if (root.preferredLanguage === "es") return "🔴 Escuchando… Pulsa el micrófono para enviar"
+            return i18n("🔴 Listening… Click mic again to send")
+        }
+        if (root.preferredLanguage === "en") return "Ask or request an action from Bonsai…"
+        if (root.preferredLanguage === "es") return "Pregunta o pide una acción a Bonsai…"
+        return i18n("Ask or request an action from Bonsai…")
+    }
+
+    function getThinkingText() {
+        if (root.preferredLanguage === "en") return "Bonsai is thinking…"
+        if (root.preferredLanguage === "es") return "Bonsai está pensando…"
+        return i18n("Bonsai is thinking…")
+    }
+
+    onPreferredLanguageChanged: {
+        if (chatModel.count === 1 && chatModel.get(0).role === "welcome") {
+            chatModel.setProperty(0, "text", root.getWelcomeMessage())
+        }
+        root.loadToolSchema()
+    }
+
     Component.onCompleted: {
         chatModel.append({
             "role": "welcome",
-            "text": i18n("Hello! I am Bonsai, your native local assistant for KDE Plasma. I can answer questions, analyze screenshots, or control desktop settings (brightness, volume, notifications, windows) completely offline via Ollama."),
+            "text": root.getWelcomeMessage(),
             "toolInfo": ""
         })
 
@@ -577,8 +800,28 @@ PlasmoidItem {
         }
     }
 
-    function loadToolSchema() {
-        root.runCli("python3 '" + root.toolsScriptPath + "' schema", (code, stdout) => {
+    function detectLanguage(text) {
+        if (!text) return (Qt.locale().name.indexOf("es") === 0 ? "es" : "en")
+        var lower = text.toLowerCase()
+        var enWords = [" the ", " and ", " to ", " set ", " create ", " find ", " search ", " open ", " why ", " is ", " for ", " with ", " brightness ", " volume ", " folder ", " file ", " in ", " how ", " what ", " make ", " of "]
+        var esWords = [" el ", " la ", " los ", " las ", " y ", " de ", " en ", " pon ", " ajusta ", " crea ", " busca ", " abre ", " brillo ", " volumen ", " carpeta ", " archivo ", " por ", " cómo ", " que ", " qué ", " para "]
+        var padded = " " + lower + " "
+        var enCount = 0
+        var esCount = 0
+        for (var i = 0; i < enWords.length; i++) {
+            if (padded.indexOf(enWords[i]) !== -1) enCount++
+        }
+        for (var j = 0; j < esWords.length; j++) {
+            if (padded.indexOf(esWords[j]) !== -1) esCount++
+        }
+        if (enCount > esCount) return "en"
+        if (esCount > enCount) return "es"
+        return (Qt.locale().name.indexOf("es") === 0) ? "es" : "en"
+    }
+
+    function loadToolSchema(lang) {
+        var l = lang || ((root.preferredLanguage && root.preferredLanguage !== "auto") ? root.preferredLanguage : (Qt.locale().name.indexOf("es") === 0 ? "es" : "en"))
+        root.runCli("python3 '" + root.toolsScriptPath + "' --lang " + l + " schema", (code, stdout) => {
             if (code === 0 && stdout.trim() !== "") {
                 try {
                     root.toolDefinitions = JSON.parse(stdout.trim())
@@ -642,7 +885,7 @@ PlasmoidItem {
         root.conversationHistory = []
         chatModel.append({
             "role": "welcome",
-            "text": i18n("Conversation cleared. How can I help you?"),
+            "text": root.getClearedMessage(),
             "toolInfo": ""
         })
     }
@@ -690,9 +933,34 @@ PlasmoidItem {
         })
 
         // Preparar payload para Ollama directo
+        var activeLang = (root.preferredLanguage && root.preferredLanguage !== "auto") 
+                         ? root.preferredLanguage 
+                         : root.detectLanguage(text)
+
+        var systemContent = ""
+        if (activeLang === "en") {
+            systemContent = "You are Bonsai, a smart local AI assistant integrated into the KDE Plasma 6 desktop. You have access to system tools to interact with the environment: control brightness, volume, timers, launch applications, lock session, organize windows, create folders in the file system, and find or open documents/files on the computer. When the user asks you to perform an action or find a file, always invoke the appropriate tool immediately.\nIMPORTANT: Always reply to the user strictly in English."
+        } else {
+            systemContent = "Eres Bonsai, un asistente local inteligente integrado en el escritorio KDE Plasma 6. Tienes acceso a herramientas del sistema para interactuar con el entorno: controlar brillo, volumen, temporizadores, abrir aplicaciones, bloquear sesión, organizar ventanas, crear carpetas en el sistema de archivos y buscar o abrir documentos/archivos en el equipo. Si el usuario te pide buscar un documento y abrirlo (o cualquier acción del sistema), invoca siempre la herramienta adecuada de inmediato.\nIMPORTANTE: Responde siempre al usuario estrictamente en español."
+        }
+
+        var customPrompt = (Plasmoid.configuration && Plasmoid.configuration.customSystemPrompt) ? Plasmoid.configuration.customSystemPrompt.trim() : ""
+        if (customPrompt !== "") {
+            systemContent += "\n" + (activeLang === "en" ? "Custom user instructions:\n" : "Instrucciones personalizadas del usuario:\n") + customPrompt
+        }
+
+        var messagesToSend = []
+        messagesToSend.push({
+            "role": "system",
+            "content": systemContent
+        })
+        for (var h = 0; h < root.conversationHistory.length; h++) {
+            messagesToSend.push(root.conversationHistory[h])
+        }
+
         var payload = {
             "model": root.currentModel,
-            "messages": root.conversationHistory,
+            "messages": messagesToSend,
             "stream": true
         }
 
@@ -761,10 +1029,11 @@ PlasmoidItem {
                             var fnArgs = JSON.stringify(call.function.arguments || {})
                             var safeArgs = fnArgs.replace(/'/g, "'\\''")
 
-                            root.runCli("python3 '" + root.toolsScriptPath + "' call " + fnName + " '" + safeArgs + "'", (code, stdout) => {
+                            root.runCli("python3 '" + root.toolsScriptPath + "' --lang " + activeLang + " call " + fnName + " '" + safeArgs + "'", (code, stdout) => {
                                 try {
                                     var res = JSON.parse(stdout.trim())
-                                    var info = res.message || (res.success ? i18n("Action executed") : res.error)
+                                    var defaultActionMsg = (activeLang === "en") ? "Action executed" : "Acción ejecutada"
+                                    var info = res.message || (res.success ? defaultActionMsg : res.error)
                                     var curTools = chatModel.get(assistantIndex).toolInfo
                                     var updated = curTools ? (curTools + " • " + info) : info
                                     chatModel.setProperty(assistantIndex, "toolInfo", updated)

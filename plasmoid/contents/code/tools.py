@@ -14,6 +14,24 @@ import glob
 import re
 import shutil
 
+BONSAI_LANG = os.environ.get("BONSAI_LANG", "").lower().strip()
+if "--lang" in sys.argv:
+    try:
+        idx = sys.argv.index("--lang")
+        if idx + 1 < len(sys.argv):
+            BONSAI_LANG = sys.argv[idx + 1].lower().strip()
+            sys.argv.pop(idx + 1)
+            sys.argv.pop(idx)
+    except Exception:
+        pass
+
+if not BONSAI_LANG or BONSAI_LANG == "auto":
+    sys_env = os.environ.get("LANGUAGE", "") or os.environ.get("LC_ALL", "") or os.environ.get("LANG", "")
+    BONSAI_LANG = "es" if "es" in sys_env.lower() else "en"
+
+def tr(en_text, es_text):
+    return en_text if BONSAI_LANG == "en" else es_text
+
 def get_bin(candidates):
     for c in candidates:
         if os.path.isabs(c):
@@ -68,7 +86,7 @@ def set_brightness(percent):
             "org.kde.Solid.PowerManagement.Actions.BrightnessControl.setBrightness",
             str(val)
         ])
-        return {"success": True, "message": f"Brillo ajustado al {percent}%"}
+        return {"success": True, "message": tr(f"Brightness set to {percent}%", f"Brillo ajustado al {percent}%")}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -87,28 +105,28 @@ def set_volume(percent):
     try:
         pct = max(0, min(150, int(percent)))
         subprocess.check_call(["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{pct}%"])
-        return {"success": True, "message": f"Volumen fijado al {pct}%"}
+        return {"success": True, "message": tr(f"Volume set to {pct}%", f"Volumen fijado al {pct}%")}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 def toggle_mute():
     try:
         subprocess.check_call(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"])
-        return {"success": True, "message": "Estado de silencio alternado"}
+        return {"success": True, "message": tr("Mute toggled", "Estado de silencio alternado")}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 def send_notification(title, message):
     try:
         subprocess.check_call(["notify-send", "-a", "Bonsai AI", str(title), str(message)])
-        return {"success": True, "message": "Notificación enviada"}
+        return {"success": True, "message": tr("Notification sent", "Notificación enviada")}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 def lock_screen():
     try:
         subprocess.check_call([QDBUS, "org.freedesktop.ScreenSaver", "/ScreenSaver", "Lock"])
-        return {"success": True, "message": "Pantalla bloqueada"}
+        return {"success": True, "message": tr("Screen locked", "Pantalla bloqueada")}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -131,7 +149,7 @@ def take_screenshot(mode="fullscreen"):
             "success": True,
             "path": out_path,
             "base64_image": b64,
-            "message": f"Captura realizada con éxito ({mode})"
+            "message": tr(f"Screenshot taken ({mode})", f"Captura realizada con éxito ({mode})")
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -175,7 +193,7 @@ for (var i = 0; i < allDesktops.length; i++) {{
 """
         subprocess.check_call([QDBUS, "org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell.evaluateScript", script])
         theme_name = os.path.basename(img_path)
-        return {"success": True, "message": f"Fondo de pantalla cambiado a '{theme_name}'"}
+        return {"success": True, "message": tr(f"Wallpaper changed to '{theme_name}'", f"Fondo de pantalla cambiado a '{theme_name}'")}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -203,14 +221,14 @@ def launch_application(app_name, target=None):
         if target:
             cmd.append(target)
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return {"success": True, "message": f"Aplicación '{app_name}' iniciada"}
+        return {"success": True, "message": tr(f"Application '{app_name}' launched", f"Aplicación '{app_name}' iniciada")}
     except Exception:
         try:
             cmd = ["kstart6", "--", app_name] if subprocess.call(["which", "kstart6"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0 else ["kstart5", "--", app_name]
             if target:
                 cmd.append(target)
             subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return {"success": True, "message": f"Aplicación '{app_name}' iniciada"}
+            return {"success": True, "message": tr(f"Application '{app_name}' launched", f"Aplicación '{app_name}' iniciada")}
         except Exception as e2:
             return {"success": False, "error": f"Error al abrir la app: {e2}"}
 
@@ -264,7 +282,7 @@ if (N === 1) {
         subprocess.check_call([QDBUS, "org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting.unloadScript", "bonsai_tile"])
         if os.path.exists(script_file):
             os.remove(script_file)
-        return {"success": True, "message": "Ventanas organizadas en mosaico"}
+        return {"success": True, "message": tr("Windows arranged in tile", "Ventanas organizadas en mosaico")}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -273,13 +291,13 @@ def manage_windows(action):
         act = action.lower().strip()
         if act == "show_desktop":
             subprocess.check_call([QDBUS, "org.kde.kglobalaccel", "/component/kwin", "org.kde.kglobalaccel.Component.invokeShortcut", "Show Desktop"])
-            return {"success": True, "message": "Mostrando escritorio"}
+            return {"success": True, "message": tr("Showing desktop", "Mostrando escritorio")}
         elif act in ["overview"]:
             subprocess.check_call([QDBUS, "org.kde.kglobalaccel", "/component/kwin", "org.kde.kglobalaccel.Component.invokeShortcut", "Overview"])
-            return {"success": True, "message": "Vista general de ventanas activada"}
+            return {"success": True, "message": tr("Overview activated", "Vista general de ventanas activada")}
         elif act in ["grid_view", "grid"]:
             subprocess.check_call([QDBUS, "org.kde.kglobalaccel", "/component/kwin", "org.kde.kglobalaccel.Component.invokeShortcut", "Grid View"])
-            return {"success": True, "message": "Efecto cuadrícula de ventanas activado"}
+            return {"success": True, "message": tr("Grid view activated", "Efecto cuadrícula de ventanas activado")}
         elif act in ["tile_mosaic", "tile_split", "tile", "mosaico"]:
             return tile_all_windows()
         else:
@@ -343,7 +361,7 @@ def set_timer(minutes, label=None):
         time_str = f"{int(mins)} min" if mins.is_integer() else f"{mins} min"
         return {
             "success": True,
-            "message": f"Temporizador de {time_str} activado ('{tag}'). Te avisaré con sonido y notificación cuando termine."
+            "message": tr(f"Timer set for {time_str} ('{tag}'). You will get an alarm and notification.", f"Temporizador de {time_str} activado ('{tag}'). Te avisaré con sonido y notificación cuando termine.")
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -352,21 +370,23 @@ def list_timers():
     import time
     timers = _load_timers()
     if not timers:
-        return {"success": True, "message": "No hay temporizadores activos"}
+        return {"success": True, "message": tr("No active timers", "No hay temporizadores activos")}
     now = time.time()
     lines = []
     for t in timers:
         remaining = int(max(0, t.get("ends_at", 0) - now))
         mins_rem = remaining // 60
         secs_rem = remaining % 60
-        lines.append(f"• {t.get('label')}: quedan {mins_rem}m {secs_rem}s")
-    return {"success": True, "message": "Temporizadores activos:\n" + "\n".join(lines)}
+        rem_str = f"{mins_rem}m {secs_rem}s remaining" if BONSAI_LANG == "en" else f"quedan {mins_rem}m {secs_rem}s"
+        lines.append(f"• {t.get('label')}: {rem_str}")
+    header = tr("Active timers:\n", "Temporizadores activos:\n")
+    return {"success": True, "message": header + "\n".join(lines)}
 
 def cancel_timers(label=None):
     import signal
     timers = _load_timers()
     if not timers:
-        return {"success": True, "message": "No hay temporizadores activos para cancelar"}
+        return {"success": True, "message": tr("No active timers to cancel", "No hay temporizadores activos para cancelar")}
     canceled = 0
     remaining_timers = []
     for t in timers:
@@ -380,7 +400,7 @@ def cancel_timers(label=None):
         else:
             remaining_timers.append(t)
     _save_timers(remaining_timers)
-    return {"success": True, "message": f"{canceled} temporizador(es) cancelado(s)"}
+    return {"success": True, "message": tr(f"{canceled} timer(s) canceled", f"{canceled} temporizador(es) cancelado(s)")}
 
 def _timer_worker(secs, label):
     import time
@@ -407,6 +427,143 @@ def _timer_worker(secs, label):
         "notify-send", "-u", "critical", "-a", "Bonsai AI",
         "-i", "alarm-clock", "⏰ Temporizador finalizado", msg
     ])
+
+# -------------------------------------------------------------
+# Gestión de Archivos y Carpetas
+# -------------------------------------------------------------
+def create_folder(path):
+    """Crea una carpeta o directorio en el sistema de archivos del usuario de forma segura."""
+    try:
+        if not path or not isinstance(path, str):
+            return {"success": False, "error": "Ruta de carpeta no válida o vacía"}
+
+        p = path.strip()
+        p = os.path.expanduser(os.path.expandvars(p))
+
+        if not os.path.isabs(p):
+            p = os.path.join(os.path.expanduser("~"), p)
+
+        norm_path = os.path.abspath(p)
+        home_path = os.path.abspath(os.path.expanduser("~"))
+
+        if not (norm_path.startswith(home_path) or norm_path.startswith("/tmp")):
+            return {
+                "success": False,
+                "error": f"Por seguridad, solo se pueden crear carpetas dentro de tu directorio personal ({home_path})"
+            }
+
+        os.makedirs(norm_path, exist_ok=True)
+        return {
+            "success": True,
+            "path": norm_path,
+            "message": tr(f"Folder created at: {norm_path}", f"Carpeta creada correctamente en: {norm_path}")
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Error al crear carpeta: {str(e)}"}
+
+def open_file(path):
+    """Abre cualquier archivo o documento con su aplicación nativa predeterminada en KDE."""
+    try:
+        if not path or not isinstance(path, str):
+            return {"success": False, "error": "Ruta no válida o vacía"}
+
+        p = os.path.expanduser(os.path.expandvars(path.strip()))
+        if not os.path.isabs(p):
+            p = os.path.join(os.path.expanduser("~"), p)
+        norm_path = os.path.abspath(p)
+
+        if not os.path.exists(norm_path):
+            return {"success": False, "error": f"El archivo no existe: {norm_path}"}
+
+        opener = get_bin(["kde-open", "kde-open5", "xdg-open"]) or "xdg-open"
+        subprocess.Popen([opener, norm_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        return {
+            "success": True,
+            "path": norm_path,
+            "message": tr(f"Opening file: {os.path.basename(norm_path)}", f"Abriendo archivo: {os.path.basename(norm_path)}")
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Error al abrir archivo: {str(e)}"}
+
+def search_files(query, directory=None, open_first=False, limit=5):
+    """Busca archivos o documentos usando Baloo (indexador nativo de KDE) y búsqueda por nombre."""
+    try:
+        if not query or not isinstance(query, str):
+            return {"success": False, "error": "Término de búsqueda no válido"}
+
+        q = query.strip()
+        results = []
+
+        base_dir = os.path.expanduser("~")
+        if directory:
+            d = os.path.abspath(os.path.expanduser(directory.strip()))
+            if os.path.isdir(d):
+                base_dir = d
+
+        # 1. Búsqueda por nombre en el sistema de archivos (rápida y exacta)
+        try:
+            find_cmd = [
+                "find", base_dir,
+                "-maxdepth", "5",
+                "-not", "-path", "*/.*",
+                "-not", "-path", "*/node_modules/*",
+                "-not", "-path", "*/.cache/*",
+                "-not", "-path", "*/venv/*",
+                "-type", "f",
+                "-iname", f"*{q}*"
+            ]
+            out = subprocess.check_output(find_cmd, text=True, stderr=subprocess.DEVNULL, timeout=4)
+            for line in out.splitlines():
+                f = line.strip()
+                if f and os.path.exists(f) and f not in results:
+                    results.append(f)
+                if len(results) >= limit:
+                    break
+        except Exception:
+            pass
+
+        # 2. Búsqueda semántica/contenido por Baloo (si faltan resultados)
+        if len(results) < limit:
+            baloo_bin = get_bin(["baloosearch6", "baloosearch"])
+            if baloo_bin:
+                try:
+                    cmd = [baloo_bin, "-l", str(max(10, limit)), q]
+                    if directory and os.path.isdir(base_dir):
+                        cmd.extend(["-d", base_dir])
+                    out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL, timeout=4)
+                    for line in out.splitlines():
+                        f = line.strip()
+                        if f.startswith("/") and os.path.exists(f) and not os.path.isdir(f):
+                            if f not in results:
+                                results.append(f)
+                        if len(results) >= limit:
+                            break
+                except Exception:
+                    pass
+
+        if not results:
+            return {
+                "success": False,
+                "found": 0,
+                "message": tr(f"No documents found matching '{q}'.", f"No se encontró ningún documento que coincida con '{q}'.")
+            }
+
+        first_opened = None
+        if open_first and results:
+            first_file = results[0]
+            open_res = open_file(first_file)
+            if open_res.get("success"):
+                first_opened = os.path.basename(first_file)
+
+        return {
+            "success": True,
+            "found": len(results),
+            "files": results,
+            "opened": first_opened,
+            "message": tr(f"Opened: '{first_opened}'", f"Abierto documento: '{first_opened}'") if first_opened else tr(f"Found {len(results)} files: ", f"Se encontraron {len(results)} archivos: ") + ", ".join([os.path.basename(f) for f in results[:3]])
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Error en la búsqueda: {str(e)}"}
 
 # -------------------------------------------------------------
 # Gestión de Ollama y Servicios
@@ -614,137 +771,214 @@ def get_voice_status():
         "tts_engine": os.path.basename(tts_bin) if tts_bin else None
     }
 
-TOOL_DEFINITIONS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "control_brightness",
-            "description": "Consulta o ajusta el brillo de pantalla del escritorio KDE Plasma.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "action": {"type": "string", "enum": ["get", "set"], "description": "Acción: get o set"},
-                    "percent": {"type": "integer", "description": "Porcentaje de 0 a 100 si la acción es set"}
-                },
-                "required": ["action"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "control_volume",
-            "description": "Consulta o ajusta el volumen de audio del sistema o silencia.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "action": {"type": "string", "enum": ["get", "set", "toggle_mute"]},
-                    "percent": {"type": "integer", "description": "Porcentaje de 0 a 100 si la acción es set"}
-                },
-                "required": ["action"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "send_desktop_notification",
-            "description": "Envía una notificación emergente nativa al escritorio KDE Plasma.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string", "description": "Título de la notificación"},
-                    "message": {"type": "string", "description": "Contenido del aviso"}
-                },
-                "required": ["title", "message"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "lock_screen",
-            "description": "Bloquea inmediatamente la sesión del escritorio de forma segura.",
-            "parameters": {"type": "object", "properties": {}}
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "change_wallpaper",
-            "description": "Cambia el fondo de pantalla de KDE Plasma según temática o archivo.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query_or_path": {"type": "string", "description": "Tema (ej: oscuro, noche, montaña, azul) o ruta absoluta de imagen"}
-                },
-                "required": ["query_or_path"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "launch_application",
-            "description": "Abre una aplicación instalada en el sistema (ej: terminal, kate, firefox, dolphin).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "app_name": {"type": "string", "description": "Nombre de la app (terminal, konsole, kate, firefox, dolphin, etc.)"},
-                    "target": {"type": "string", "description": "Ruta de archivo o URL opcional a abrir"}
-                },
-                "required": ["app_name"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "manage_windows",
-            "description": "Organiza o gestiona las ventanas abiertas en pantalla (mosaico automático de todas las ventanas, vista general interactiva, cuadrícula o mostrar escritorio).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "action": {
-                        "type": "string",
-                        "enum": ["tile_mosaic", "overview", "grid_view", "show_desktop"],
-                        "description": "Acción a realizar: 'tile_mosaic' (organiza todas las ventanas abiertas en pantalla en mosaico automático), 'overview' (vista general interactiva), 'grid_view' (vista en cuadrícula), 'show_desktop' (mostrar/ocultar escritorio)"
-                    }
-                },
-                "required": ["action"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "manage_timer",
-            "description": "Crea, consulta o cancela temporizadores y alarmas con aviso sonoro y notificación nativa.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "action": {
-                        "type": "string",
-                        "enum": ["set", "list", "cancel"],
-                        "description": "Acción: 'set' para crear uno nuevo, 'list' para ver los activos, 'cancel' para cancelarlos"
+def get_tool_definitions(lang=None):
+    use_lang = lang if lang else BONSAI_LANG
+    is_en = (use_lang == "en")
+
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "control_brightness",
+                "description": "Get or set screen brightness for KDE Plasma desktop." if is_en else "Consulta o ajusta el brillo de pantalla del escritorio KDE Plasma.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string", "enum": ["get", "set"], "description": "Action: get or set" if is_en else "Acción: get o set"},
+                        "percent": {"type": "integer", "description": "Brightness percentage from 0 to 100 if action is set" if is_en else "Porcentaje de 0 a 100 si la acción es set"}
                     },
-                    "minutes": {
-                        "type": "number",
-                        "description": "Duración en minutos (ej: 5, 10, 0.5 para 30 segundos, 0.1 para 6 segundos). Requerido si action='set'"
+                    "required": ["action"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "control_volume",
+                "description": "Get or set system audio volume or toggle mute." if is_en else "Consulta o ajusta el volumen de audio del sistema o silencia.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string", "enum": ["get", "set", "toggle_mute"]},
+                        "percent": {"type": "integer", "description": "Volume percentage from 0 to 100 if action is set" if is_en else "Porcentaje de 0 a 100 si la acción es set"}
                     },
-                    "label": {
-                        "type": "string",
-                        "description": "Motivo o etiqueta del temporizador (ej: 'Pizza', 'Café', 'Pomodoro', 'Descanso')"
-                    }
-                },
-                "required": ["action"]
+                    "required": ["action"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "send_desktop_notification",
+                "description": "Send a native desktop notification on KDE Plasma." if is_en else "Envía una notificación emergente nativa al escritorio KDE Plasma.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "Notification title" if is_en else "Título de la notificación"},
+                        "message": {"type": "string", "description": "Notification message body" if is_en else "Contenido del aviso"}
+                    },
+                    "required": ["title", "message"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "lock_screen",
+                "description": "Instantly lock the current desktop session securely." if is_en else "Bloquea inmediatamente la sesión del escritorio de forma segura.",
+                "parameters": {"type": "object", "properties": {}}
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "change_wallpaper",
+                "description": "Change KDE Plasma desktop wallpaper by theme or image file." if is_en else "Cambia el fondo de pantalla de KDE Plasma según temática o archivo.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query_or_path": {"type": "string", "description": "Theme (e.g. dark, night, mountain, blue) or absolute image path" if is_en else "Tema (ej: oscuro, noche, montaña, azul) o ruta absoluta de imagen"}
+                    },
+                    "required": ["query_or_path"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "launch_application",
+                "description": "Launch an installed desktop application (e.g. terminal, kate, firefox, dolphin)." if is_en else "Abre una aplicación instalada en el sistema (ej: terminal, kate, firefox, dolphin).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "app_name": {"type": "string", "description": "App name (terminal, konsole, kate, firefox, dolphin, etc.)" if is_en else "Nombre de la app (terminal, konsole, kate, firefox, dolphin, etc.)"},
+                        "target": {"type": "string", "description": "Optional file path or URL to open" if is_en else "Ruta de archivo o URL opcional a abrir"}
+                    },
+                    "required": ["app_name"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "manage_windows",
+                "description": "Manage open desktop windows (tile windows automatically, interactive overview, grid view, show desktop)." if is_en else "Organiza o gestiona las ventanas abiertas en pantalla (mosaico automático de todas las ventanas, vista general interactiva, cuadrícula o mostrar escritorio).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["tile_mosaic", "overview", "grid_view", "show_desktop"],
+                            "description": "Action: 'tile_mosaic', 'overview', 'grid_view', 'show_desktop'"
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "manage_timer",
+                "description": "Create, list, or cancel timers with alarm sound and native notification." if is_en else "Crea, consulta o cancela temporizadores y alarmas con aviso sonoro y notificación nativa.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["set", "list", "cancel"],
+                            "description": "Action: 'set', 'list', 'cancel'"
+                        },
+                        "minutes": {
+                            "type": "number",
+                            "description": "Duration in minutes (e.g., 5, 10, 0.5 for 30s). Required if action='set'" if is_en else "Duración en minutos (ej: 5, 10, 0.5 para 30 segundos, 0.1 para 6 segundos). Requerido si action='set'"
+                        },
+                        "label": {
+                            "type": "string",
+                            "description": "Timer label or purpose (e.g., 'Pizza', 'Coffee', 'Pomodoro', 'Break')" if is_en else "Motivo o etiqueta del temporizador (ej: 'Pizza', 'Café', 'Pomodoro', 'Descanso')"
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "create_folder",
+                "description": "Create a new folder or directory in user file system (e.g. in Documents, Downloads, Desktop, or personal home)." if is_en else "Crea una nueva carpeta o directorio en el sistema de archivos del usuario (por ejemplo en Documentos, Descargas, Escritorio o en su carpeta personal).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Path or folder name to create (e.g., 'Projects', 'Documents/Workspace', '~/Downloads/Photos')." if is_en else "Ruta o nombre de la carpeta a crear (ej: 'Fotos', 'Documentos/Proyectos', '~/Descargas/Prueba')."
+                        }
+                    },
+                    "required": ["path"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "search_files",
+                "description": "Search documents or files on the computer by name or content (KDE Baloo). If open_first=true, opens the found document in its default app (Okular, Kate, LibreOffice, etc.)." if is_en else "Busca documentos o archivos en el equipo por nombre o contenido en KDE Plasma. Si open_first=true, abre automáticamente el primer archivo encontrado con su programa predeterminado (ej: Okular para PDF, Kate, LibreOffice).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Filename, extension, or keywords to search (e.g., 'specification', 'invoice.pdf', 'project')." if is_en else "Nombre del archivo, extensión o términos de búsqueda (ej: 'especificacion', 'factura.pdf', 'proyecto', 'presupuesto')."
+                        },
+                        "open_first": {
+                            "type": "boolean",
+                            "description": "If true, automatically opens the first found document with default app." if is_en else "Si es true, abre automáticamente el archivo encontrado en su programa predeterminado."
+                        },
+                        "directory": {
+                            "type": "string",
+                            "description": "Optional directory to search in (e.g., '~/Documents', '~/Downloads')." if is_en else "Directorio opcional donde acotar la búsqueda (ej: '~/Documentos', '~/Descargas')."
+                        }
+                    },
+                    "required": ["query"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "open_file",
+                "description": "Open any existing file or document with default desktop application (Okular for PDF, Kate, LibreOffice, Gwenview, etc.)." if is_en else "Abre cualquier archivo o documento con su aplicación predeterminada de KDE/Linux (Okular para PDF, Kate para texto/código, LibreOffice, Gwenview, etc.).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Path of the file to open." if is_en else "Ruta del archivo a abrir."
+                        }
+                    },
+                    "required": ["path"]
+                }
             }
         }
-    }
-]
+    ]
+
+TOOL_DEFINITIONS = get_tool_definitions()
 
 def execute_tool(name, args):
-    if name == "control_brightness":
+    if name in ["search_files", "find_files", "search_documents"]:
+        q = args.get("query") or args.get("name") or args.get("file_name") or args.get("pattern") or ""
+        open_first = args.get("open_first", False)
+        if "open" in args and args["open"]:
+            open_first = True
+        return search_files(q, directory=args.get("directory"), open_first=open_first)
+    elif name in ["open_file", "open_document", "xdg_open"]:
+        p = args.get("path") or args.get("file") or args.get("file_path") or ""
+        return open_file(p)
+    elif name in ["create_folder", "create_directory", "mkdir"]:
+        path = args.get("path") or args.get("folder_name") or args.get("name") or args.get("directory") or ""
+        return create_folder(path)
+    elif name == "control_brightness":
         act = args.get("action")
         if act == "get":
             return get_brightness()
@@ -784,7 +1018,17 @@ if __name__ == "__main__":
 
     cmd = sys.argv[1]
     if cmd == "schema":
-        print(json.dumps(TOOL_DEFINITIONS))
+        print(json.dumps(get_tool_definitions(BONSAI_LANG)))
+    elif cmd == "create_folder":
+        folder_path = sys.argv[2] if len(sys.argv) >= 3 else ""
+        print(json.dumps(create_folder(folder_path)))
+    elif cmd == "search_files":
+        query = sys.argv[2] if len(sys.argv) >= 3 else ""
+        open_first = (sys.argv[3].lower() == "true") if len(sys.argv) >= 4 else False
+        print(json.dumps(search_files(query, open_first=open_first)))
+    elif cmd == "open_file":
+        path = sys.argv[2] if len(sys.argv) >= 3 else ""
+        print(json.dumps(open_file(path)))
     elif cmd == "start_ollama":
         print(json.dumps(start_ollama()))
     elif cmd == "record":

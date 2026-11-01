@@ -3,7 +3,7 @@ set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLASMOID_DIR="$DIR/plasmoid"
-ID="org.kde.plasma.bonsai"
+ID="com.github.canx.plasma-bonsai"
 
 echo "=== Modo Desarrollo: Plasma Bonsai Assistant (Standalone) ==="
 

@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="100%" height="100%">
+  <defs>
+    <!-- Gradiente Follaje Principal -->
+    <linearGradient id="foliageMain" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2ecc71"/>
+      <stop offset="100%" stop-color="#1b8a4a"/>
+    </linearGradient>
+
+    <!-- Gradiente Follaje Superior / Luz -->
+    <linearGradient id="foliageLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#48e589"/>
+      <stop offset="100%" stop-color="#239b56"/>
+    </linearGradient>
+
+    <!-- Gradiente Follaje Izquierdo / Profundo -->
+    <linearGradient id="foliageDeep" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1abc9c"/>
+      <stop offset="100%" stop-color="#145a32"/>
+    </linearGradient>
+
+    <!-- Gradiente Tronco y Ramas -->
+    <linearGradient id="trunkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8d6e63"/>
+      <stop offset="100%" stop-color="#4e342e"/>
+    </linearGradient>
+
+    <!-- Gradiente Maceta Cerámica -->
+    <linearGradient id="potGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#37474f"/>
+      <stop offset="50%" stop-color="#455a64"/>
+      <stop offset="100%" stop-color="#263238"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Sombra base suave de la maceta -->
+  <ellipse cx="24" cy="43.5" rx="15" ry="2.5" fill="#000000" opacity="0.25"/>
+
+  <!-- Maceta minimalista -->
+  <path d="M 12 37.5 L 14.5 42 L 33.5 42 L 36 37.5 Z" fill="url(#potGrad)"/>
+  <!-- Reborde superior de la maceta -->
+  <rect x="10.5" y="36" width="27" height="2" rx="1" fill="#607d8b"/>
+  <!-- Patas de la maceta -->
+  <rect x="15" y="42" width="3" height="1.5" rx="0.5" fill="#263238"/>
+  <rect x="30" y="42" width="3" height="1.5" rx="0.5" fill="#263238"/>
+
+  <!-- Sustrato / Tierra musgosa -->
+  <ellipse cx="24" cy="36.5" rx="11" ry="1.5" fill="#1e272c"/>
+  <ellipse cx="24" cy="36.5" rx="9" ry="1" fill="#2d6a4f" opacity="0.6"/>
+
+  <!-- Tronco de Bonsai estilizado (curva natural) -->
+  <path d="M 23 36.5 
+           C 22.5 33, 21.5 30, 23 27
+           C 24 25, 27 24, 28 21
+           C 29 18, 27.5 16, 26 14
+           L 24.5 14.5
+           C 26 17, 26.5 19, 25 21
+           C 23.5 23, 20.5 25, 20 28
+           C 19.5 31, 20.5 34, 21 36.5 Z" 
+        fill="url(#trunkGrad)"/>
+
+  <!-- Rama secundaria izquierda -->
+  <path d="M 21.5 28.5
+           C 18 28, 15 26.5, 13 25
+           L 13.5 24
+           C 16 25.5, 19 26.5, 22.5 27 Z" 
+        fill="url(#trunkGrad)"/>
+
+  <!-- Rama secundaria derecha -->
+  <path d="M 26.5 22.5
+           C 29 22, 32 20.5, 34 19
+           L 34.5 20
+           C 32 22, 29 23.5, 26 24 Z" 
+        fill="url(#trunkGrad)"/>
+
+  <!-- Nubes de follaje (estilo pads de bonsái) -->
+
+  <!-- 1. Follaje rama izquierda (medio) -->
+  <g>
+    <ellipse cx="12" cy="23.5" rx="7" ry="4" fill="url(#foliageDeep)"/>
+    <ellipse cx="14" cy="22" rx="5" ry="3" fill="url(#foliageMain)"/>
+    <ellipse cx="13" cy="21" rx="3.5" ry="2" fill="url(#foliageLight)"/>
+  </g>
+
+  <!-- 2. Follaje rama derecha (medio-alto) -->
+  <g>
+    <ellipse cx="35" cy="18.5" rx="7.5" ry="4.5" fill="url(#foliageDeep)"/>
+    <ellipse cx="33.5" cy="17" rx="5.5" ry="3.2" fill="url(#foliageMain)"/>
+    <ellipse cx="34.5" cy="16" rx="3.8" ry="2.2" fill="url(#foliageLight)"/>
+  </g>
+
+  <!-- 3. Copa principal superior -->
+  <g>
+    <ellipse cx="25" cy="12.5" rx="9" ry="5.5" fill="url(#foliageDeep)"/>
+    <ellipse cx="26" cy="11" rx="7" ry="4" fill="url(#foliageMain)"/>
+    <ellipse cx="25" cy="9.5" rx="4.5" ry="2.5" fill="url(#foliageLight)"/>
+  </g>
+
+  <!-- Pequeño destello tecnológico / AI inteligente sutil en la copa -->
+  <circle cx="26" cy="9.5" r="1" fill="#ffffff" opacity="0.8"/>
+</svg>

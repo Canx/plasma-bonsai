@@ -49,10 +49,10 @@ Poder hablar directamente con Bonsai y que responda con voz natural, **100% en l
   - *"Busca en el portapapeles el enlace que copié hace un rato"*.
   - **Implementación:** Interfaz D-Bus de Klipper (`org.kde.klipper`).
 
-### 5. Búsqueda Rápida de Archivos en Local 🔎
-- [ ] **Búsqueda de documentos y descargas:**
-  - *"Encuentra el PDF que descargué hoy"* o *"Busca el archivo 'proyecto' en mi carpeta personal"*.
-  - **Implementación:** Integración con `baloosearch` (motor de búsqueda indexada de KDE) o fallback a `fd` / `find` acotado a `$HOME`.
+### 5. Búsqueda Rápida de Archivos en Local 🔎 (Completado ✅)
+- [x] **Búsqueda de documentos y descargas:**
+  - *"Encuentra el PDF que descargué hoy"* o *"Busca el archivo 'proyecto' y ábrelo"*.
+  - **Implementación:** Integración híbrida con `baloosearch6` (motor indexado nativo de KDE Plasma 6) y búsqueda por nombre `find` acotada a `$HOME`, con apertura automática mediante `xdg-open` / `kde-open`.
 
 ### 6. Información Meteorológica (Clima) ☀️
 - [ ] **Consulta meteorológica en lenguaje natural:**
@@ -63,8 +63,10 @@ Poder hablar directamente con Bonsai y que responda con voz natural, **100% en l
 
 ## 🎨 Mejoras de Interfaz y Experiencia de Usuario (UX)
 
-- [ ] Diálogo de configuración nativo de KDE (*Settings*) para personalizar:
-  - URL personalizada de Ollama (por si está en otra máquina en red local).
-  - Umbral o sensibilidad del micrófono para la voz.
-  - Atajo de teclado global dedicado para invocar a Bonsai (`Meta + Space` o configurable).
+- [x] **Diálogo de configuración nativo de KDE (Settings) ✅:**
+  - URL personalizada de Ollama (para localhost o servidor remoto en red local).
+  - Selector de idioma preferido de respuesta (Automático / Inglés / Español).
+  - Instrucciones personalizadas (System Prompt configurable).
+  - Botón de ajustes ⚙️ en la cabecera y menú contextual nativo de KDE Plasma.
+- [ ] Atajo de teclado global dedicado para invocar a Bonsai (`Meta + Space` o configurable).
 - [ ] Historial de conversaciones guardado entre sesiones (opcional).
