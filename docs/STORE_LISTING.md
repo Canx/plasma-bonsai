@@ -8,7 +8,7 @@ Ficha lista para copiar y pegar al publicar en **[store.kde.org](https://store.k
 
 * **Product Name:** `Plasma Bonsai Assistant`
 * **Category:** `Plasma 6 Applets` *(⚠️ IMPORTANTE: Seleccionar categoría Plasma 6, no Plasma 5)*
-* **Version:** `1.0.2`
+* **Version:** `1.0.3`
 * **License:** `MIT`
 * **Homepage / Source Code:** `https://github.com/Canx/plasma-bonsai`
 * **Tags:** `ai`, `ollama`, `assistant`, `plasma 6`, `local ai`, `offline`, `voice`, `chatgpt alternative`, `qml`
