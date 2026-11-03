@@ -39,8 +39,8 @@ $TOOL --type Plasma/Applet --install "$PLASMOID_DIR"
 LEGACY_ID="org.kde.plasma.bonsai"
 ln -sfn "$HOME/.local/share/plasma/plasmoids/$ID" "$HOME/.local/share/plasma/plasmoids/$LEGACY_ID" 2>/dev/null || true
 
-# Limpiar caché de compilación QML para forzar lectura de cambios
-rm -rf "$HOME/.cache/qmlcache" 2>/dev/null || true
+# Limpiar caché de compilación QML e iconos para forzar lectura de cambios
+rm -rf "$HOME/.cache/qmlcache" "$HOME/.cache/icon-cache.kcache" 2>/dev/null || true
 
 # Reiniciar plasmashell automáticamente si está activo para aplicar cambios en caliente
 if systemctl --user is-active --quiet plasma-plasmashell 2>/dev/null; then
