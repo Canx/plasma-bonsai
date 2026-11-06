@@ -21,6 +21,8 @@ PlasmoidItem {
     property bool showSettings: false
     property bool ollamaConnected: false
     property bool isBusy: false
+    property var activeXhr: null
+    property bool cancelRequested: false
     property bool isRecordingVoice: false
     property bool isPinned: false
     property bool isPickingFile: false
@@ -115,6 +117,13 @@ PlasmoidItem {
     // Representación completa (ventana emergente o widget de escritorio)
     fullRepresentation: Item {
         id: fullRepItem
+
+        Shortcut {
+            sequence: "Escape"
+            enabled: root.activeXhr !== null
+            onActivated: root.cancelRequest()
+        }
+
         Layout.minimumWidth: Kirigami.Units.gridUnit * 22
         Layout.minimumHeight: Kirigami.Units.gridUnit * 26
         Layout.preferredWidth: Kirigami.Units.gridUnit * 26
@@ -506,6 +515,17 @@ PlasmoidItem {
                     text: root.getThinkingText()
                     font.italic: true
                     opacity: 0.75
+                    Layout.fillWidth: true
+                }
+
+                PlasmaComponents.ToolButton {
+                    id: cancelBtn
+                    visible: root.activeXhr !== null
+                    icon.name: "process-stop"
+                    text: root.tr("Stop", "Parar")
+                    ToolTip.text: root.tr("Cancel the current request (Esc)", "Cancelar la petición actual (Esc)")
+                    ToolTip.visible: hovered
+                    onClicked: root.cancelRequest()
                 }
             }
 
@@ -759,6 +779,23 @@ PlasmoidItem {
             return root.tr("🔴 Listening… Click mic again to send", "🔴 Escuchando… Pulsa el micrófono para enviar")
         }
         return root.tr("Ask or request an action from Bonsai…", "Pregunta o pide una acción a Bonsai…")
+    }
+
+    function cancelRequest() {
+        if (root.activeXhr === null) return
+        root.cancelRequested = true
+        root.activeXhr.abort()
+        root.unloadModel()
+    }
+
+    // Ollama no interrumpe el procesado del prompt al cerrarse la conexión:
+    // descargar el modelo (keep_alive: 0) detiene el runner y libera la CPU.
+    function unloadModel() {
+        if (root.currentModel === "") return
+        var x = new XMLHttpRequest()
+        x.open("POST", root.ollamaUrl + "/api/generate")
+        x.setRequestHeader("Content-Type", "application/json")
+        x.send(JSON.stringify({"model": root.currentModel, "keep_alive": 0}))
     }
 
     function getThinkingText() {
@@ -1080,6 +1117,8 @@ PlasmoidItem {
 
         var lastProcessed = 0
         var accumulatedToolCalls = []
+        root.cancelRequested = false
+        root.activeXhr = xhr
 
         xhr.onreadystatechange = function() {
             if (xhr.readyState === 3 || xhr.readyState === 4) {
@@ -1121,6 +1160,23 @@ PlasmoidItem {
 
             if (xhr.readyState === 4) {
                 root.isBusy = false
+                root.activeXhr = null
+
+                if (root.cancelRequested) {
+                    root.cancelRequested = false
+                    var partial = chatModel.get(assistantIndex).text
+                    if (partial === "") {
+                        chatModel.setProperty(assistantIndex, "text", root.tr("⏹ Request cancelled.", "⏹ Petición cancelada."))
+                        // Sin respuesta: retirar la pregunta sin contestar del contexto
+                        if (root.conversationHistory.length > 0 && root.conversationHistory[root.conversationHistory.length - 1].role === "user") {
+                            root.conversationHistory.pop()
+                        }
+                    } else {
+                        chatModel.setProperty(assistantIndex, "text", partial + "\n\n" + root.tr("⏹ _(cancelled)_", "⏹ _(cancelado)_"))
+                        root.conversationHistory.push({"role": "assistant", "content": partial})
+                    }
+                    return
+                }
 
                 if (xhr.status === 200) {
                     var finalAssistantText = chatModel.get(assistantIndex).text
