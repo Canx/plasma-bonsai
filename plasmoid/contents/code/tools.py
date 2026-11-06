@@ -1140,6 +1140,105 @@ def get_voice_status():
         "tts_engine": os.path.basename(tts_bin) if tts_bin else None
     }
 
+MPRIS_PREFIX = "org.mpris.MediaPlayer2."
+MPRIS_PATH = "/org/mpris/MediaPlayer2"
+MPRIS_PLAYER_IFACE = "org.mpris.MediaPlayer2.Player"
+
+def _busctl(*args):
+    """Ejecuta busctl en el bus de sesión y devuelve stdout (lanza excepción si falla)."""
+    return subprocess.check_output(
+        ["busctl", "--user", *args], text=True, stderr=subprocess.PIPE, timeout=5
+    )
+
+def _mpris_get(service, iface, prop):
+    out = _busctl("--json=short", "get-property", service, MPRIS_PATH, iface, prop)
+    return json.loads(out).get("data")
+
+def _mpris_list_services():
+    out = _busctl("--json=short", "list", "--no-pager", "--acquired")
+    names = [e.get("name", "") for e in json.loads(out)]
+    return sorted(n for n in names if n.startswith(MPRIS_PREFIX))
+
+def _mpris_variant(meta, key, default=None):
+    v = meta.get(key)
+    return v.get("data") if isinstance(v, dict) else default
+
+def _mpris_snapshot(service):
+    """Devuelve estado y metadatos de un reproductor MPRIS."""
+    try:
+        status = _mpris_get(service, MPRIS_PLAYER_IFACE, "PlaybackStatus")
+    except Exception:
+        status = "Unknown"
+    try:
+        meta = _mpris_get(service, MPRIS_PLAYER_IFACE, "Metadata") or {}
+    except Exception:
+        meta = {}
+    try:
+        identity = _mpris_get(service, "org.mpris.MediaPlayer2", "Identity")
+    except Exception:
+        identity = service[len(MPRIS_PREFIX):]
+    artists = _mpris_variant(meta, "xesam:artist", []) or []
+    if isinstance(artists, str):
+        artists = [artists]
+    length_us = _mpris_variant(meta, "mpris:length", 0) or 0
+    return {
+        "service": service,
+        "player": identity,
+        "status": status,
+        "title": _mpris_variant(meta, "xesam:title", ""),
+        "artist": ", ".join(artists),
+        "album": _mpris_variant(meta, "xesam:album", ""),
+        "length_seconds": int(length_us // 1_000_000),
+    }
+
+def _mpris_pick(players, player=None):
+    """Elige reproductor: coincidencia por nombre, si no el que suena, si no el primero."""
+    if player:
+        q = player.lower().strip()
+        for p in players:
+            if q in p["service"].lower() or q in str(p["player"]).lower():
+                return p
+        return None
+    for p in players:
+        if p["status"] == "Playing":
+            return p
+    for p in players:
+        if p["status"] == "Paused":
+            return p
+    return players[0] if players else None
+
+MPRIS_ACTIONS = {
+    "play": "Play", "pause": "Pause", "play_pause": "PlayPause",
+    "stop": "Stop", "next": "Next", "previous": "Previous",
+}
+
+def control_media(action="status", player=None):
+    """Consulta o controla cualquier reproductor multimedia vía MPRIS2 (D-Bus)."""
+    action = (action or "status").lower().strip()
+    try:
+        services = _mpris_list_services()
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+    if not services:
+        return {"success": False, "error": tr("No media player is running.", "No hay ningún reproductor multimedia activo.")}
+    players = [_mpris_snapshot(s) for s in services]
+
+    if action == "list":
+        return {"success": True, "players": players}
+
+    chosen = _mpris_pick(players, player)
+    if chosen is None:
+        return {"success": False, "error": tr(f"Player '{player}' not found.", f"No se encontró el reproductor '{player}'.")}
+    if action in ("status", "now_playing", "get"):
+        return {"success": True, **chosen}
+    if action not in MPRIS_ACTIONS:
+        return {"success": False, "error": tr(f"Unknown media action '{action}'.", f"Acción multimedia '{action}' no reconocida.")}
+    try:
+        _busctl("call", chosen["service"], MPRIS_PATH, MPRIS_PLAYER_IFACE, MPRIS_ACTIONS[action])
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+    return {"success": True, "action": action, **_mpris_snapshot(chosen["service"])}
+
 def get_tool_definitions(lang=None):
     use_lang = lang if lang else BONSAI_LANG
     is_en = (use_lang == "en")
@@ -1350,6 +1449,21 @@ def get_tool_definitions(lang=None):
         {
             "type": "function",
             "function": {
+                "name": "control_media",
+                "description": "Control or query media players (Spotify, VLC, browsers, Elisa...) via MPRIS: what is playing, play, pause, next, previous, stop." if is_en else "Controla o consulta reproductores multimedia (Spotify, VLC, navegadores, Elisa...) vía MPRIS: qué suena, reproducir, pausar, siguiente, anterior, parar.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string", "enum": ["status", "list", "play", "pause", "play_pause", "next", "previous", "stop"], "description": "Action to perform; 'status' returns the current track" if is_en else "Acción; 'status' devuelve la pista actual"},
+                        "player": {"type": "string", "description": "Optional player name (e.g. 'spotify', 'vlc'). Defaults to the one playing" if is_en else "Nombre opcional del reproductor (ej: 'spotify', 'vlc'). Por defecto el que esté sonando"}
+                    },
+                    "required": ["action"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "manage_clipboard",
                 "description": "Read, check history, copy new text, or clear the system clipboard (KDE Klipper) and mouse selection." if is_en else "Lee el contenido, consulta el historial, copia nuevo texto o limpia el portapapeles de KDE Plasma (Klipper) y la selección de texto en pantalla.",
                 "parameters": {
@@ -1411,6 +1525,8 @@ def execute_tool(name, args):
     elif name in ["create_folder", "create_directory", "mkdir"]:
         path = args.get("path") or args.get("folder_name") or args.get("name") or args.get("directory") or ""
         return create_folder(path)
+    elif name in ["control_media", "media_control", "mpris"]:
+        return control_media(args.get("action", "status"), args.get("player"))
     elif name == "control_brightness":
         act = args.get("action")
         if act == "get":

@@ -24,8 +24,8 @@ Poder hablar directamente con Bonsai y que responda con voz natural, **100% en l
 
 ## 🛠️ Nuevas Herramientas del Sistema (Tool Calling)
 
-### 1. Control Multimedia Universal (MPRIS2) 🎵
-- [ ] **Soporte para Spotify, VLC, YouTube/Navegadores, Elisa, etc.:**
+### 1. Control Multimedia Universal (MPRIS2) 🎵 (Completado ✅)
+- [x] **Soporte para Spotify, VLC, YouTube/Navegadores, Elisa, etc.:**
   - **Consultar reproducción:** *"¿Qué canción está sonando?"* (título, artista, álbum).
   - **Control de reproducción:** *"Pausa la música"*, *"Reanuda la canción"*, *"Siguiente pista"*, *"Canción anterior"*.
   - **Implementación:** Protocolo D-Bus estándar `org.mpris.MediaPlayer2` o utilidad `playerctl`.
