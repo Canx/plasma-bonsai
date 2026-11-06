@@ -744,6 +744,15 @@ PlasmoidItem {
                         Layout.fillWidth: true
                         onClicked: Qt.openUrlExternally("https://github.com/sponsors/Canx")
                     }
+
+                    // 6. Versión instalada (leída de metadata.json)
+                    PlasmaComponents.Label {
+                        id: versionLabel
+                        text: root.tr("Version", "Versión") + " " + Plasmoid.metaData.version
+                        opacity: 0.6
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        Layout.alignment: Qt.AlignHCenter
+                    }
                 }
             }
         }
