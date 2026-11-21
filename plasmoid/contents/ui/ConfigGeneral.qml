@@ -9,6 +9,7 @@ KCM.SimpleKCM {
     id: root
 
     property alias cfg_ollamaUrl: urlField.text
+    property alias cfg_apiKey: apiKeyField.text
     property alias cfg_preferredLanguage: langCombo.currentValue
     property alias cfg_customSystemPrompt: customPromptField.text
 
@@ -17,8 +18,16 @@ KCM.SimpleKCM {
 
         QQC2.TextField {
             id: urlField
-            Kirigami.FormData.label: i18n("Ollama Server URL:")
+            Kirigami.FormData.label: i18n("AI Server URL:")
             placeholderText: "http://127.0.0.1:11434"
+            Layout.fillWidth: true
+        }
+
+        QQC2.TextField {
+            id: apiKeyField
+            Kirigami.FormData.label: i18n("API Key (optional):")
+            placeholderText: i18n("Bearer token for remote servers (e.g. sk-...)")
+            echoMode: TextInput.Password
             Layout.fillWidth: true
         }
 

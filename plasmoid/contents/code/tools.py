@@ -948,6 +948,45 @@ def start_ollama():
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+
+def check_ollama_installed():
+    """Comprueba si el binario de Ollama está instalado en el sistema"""
+    ollama_path = shutil.which("ollama")
+    return {
+        "installed": bool(ollama_path),
+        "path": ollama_path or ""
+    }
+
+
+def install_ollama():
+    """Abre un terminal interactivo para instalar Ollama mediante el script oficial"""
+    install_cmd = (
+        "echo '=== Installing Ollama ==='; "
+        "curl -fsSL https://ollama.com/install.sh | sh; "
+        "echo ''; "
+        "echo 'Done. You can close this window.'; "
+        "read -r -p 'Press Enter to close...' _"
+    )
+    terminals = [
+        ("konsole", ["konsole", "-e", "bash", "-c", install_cmd]),
+        ("x-terminal-emulator", ["x-terminal-emulator", "-e", "bash", "-c", install_cmd]),
+        ("kitty", ["kitty", "bash", "-c", install_cmd]),
+        ("alacritty", ["alacritty", "-e", "bash", "-c", install_cmd]),
+        ("gnome-terminal", ["gnome-terminal", "--", "bash", "-c", install_cmd]),
+        ("xterm", ["xterm", "-e", "bash", "-c", install_cmd]),
+    ]
+    for name, argv in terminals:
+        if shutil.which(name):
+            try:
+                subprocess.Popen(argv, start_new_session=True)
+                return {"success": True, "terminal": name}
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+    return {
+        "success": False,
+        "error": "No terminal emulator found. Run: curl -fsSL https://ollama.com/install.sh | sh"
+    }
+
 # -------------------------------------------------------------
 # Entrada y Salida por Voz (STT y TTS)
 # -------------------------------------------------------------
@@ -1003,6 +1042,18 @@ def record_audio(action="toggle"):
         return {"success": True, "is_recording": True, "pid": p.pid}
 
     return {"success": True, "is_recording": is_recording}
+
+def read_recorded_audio():
+    """Lee el archivo WAV recién grabado y lo devuelve en base64 para modelos con audio nativo."""
+    if not os.path.exists(REC_WAV_FILE) or os.path.getsize(REC_WAV_FILE) < 100:
+        return {"success": False, "error": "No hay audio grabado o el archivo está vacío"}
+    try:
+        with open(REC_WAV_FILE, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("ascii")
+        return {"success": True, "format": "wav", "base64_audio": b64}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 
 def transcribe_audio():
     if not os.path.exists(REC_WAV_FILE) or os.path.getsize(REC_WAV_FILE) < 100:
@@ -1585,11 +1636,17 @@ if __name__ == "__main__":
         print(json.dumps(pick_file()))
     elif cmd == "start_ollama":
         print(json.dumps(start_ollama()))
+    elif cmd == "check_ollama":
+        print(json.dumps(check_ollama_installed()))
+    elif cmd == "install_ollama":
+        print(json.dumps(install_ollama()))
     elif cmd == "record":
         action = sys.argv[2] if len(sys.argv) >= 3 else "toggle"
         print(json.dumps(record_audio(action)))
     elif cmd == "transcribe":
         print(json.dumps(transcribe_audio()))
+    elif cmd == "read_audio":
+        print(json.dumps(read_recorded_audio()))
     elif cmd == "speak":
         text = sys.argv[2] if len(sys.argv) >= 3 else ""
         print(json.dumps(speak_text(text)))

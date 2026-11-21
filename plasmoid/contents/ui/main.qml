@@ -6,6 +6,7 @@ import org.kde.plasma.plasmoid
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.plasma.plasma5support as Plasma5Support
 import org.kde.kirigami as Kirigami
+import "../code/agent.js" as Agent
 
 PlasmoidItem {
     id: root
@@ -14,15 +15,36 @@ PlasmoidItem {
     Plasmoid.icon: root.customAppIcon
     Plasmoid.title: "Plasma Bonsai Assistant"
 
-    // Configuración directa a Ollama (sin demonio)
+    // Configuración de servidores IA OpenAI-compatible (múltiples endpoints)
+    property var endpoints: []
+    property string activeEndpointId: ""
+    property string editingEndpointId: ""
+    property string editingDefaultModel: ""
+    readonly property string activeEndpointName: {
+        var ep = Agent.findEndpointById(root.endpoints, root.activeEndpointId)
+        return ep ? ep.name : ""
+    }
     property string ollamaUrl: (Plasmoid.configuration && Plasmoid.configuration.ollamaUrl) ? Plasmoid.configuration.ollamaUrl : "http://127.0.0.1:11434"
+    property string apiKey: (Plasmoid.configuration && Plasmoid.configuration.apiKey) ? Plasmoid.configuration.apiKey : ""
+    readonly property bool isLocalOllama: Agent.isLocalOllamaUrl(root.ollamaUrl)
     property string preferredLanguage: (Plasmoid.configuration && Plasmoid.configuration.preferredLanguage) ? Plasmoid.configuration.preferredLanguage : "auto"
     property string customSystemPrompt: (Plasmoid.configuration && Plasmoid.configuration.customSystemPrompt) ? Plasmoid.configuration.customSystemPrompt : ""
     property bool showSettings: false
+    property string connectionTestStatus: ""
+    property string connectionTestMessage: ""
+    property bool ollamaInstalled: true
+    property bool isPullingModel: false
+    property string pullStatusText: ""
+    property int pullProgress: -1
+    property var activePullXhr: null
     property bool ollamaConnected: false
     property bool isBusy: false
+    property string busyStatus: "thinking"
     property var activeXhr: null
     property bool cancelRequested: false
+    property int requestGeneration: 0
+    property int activeAssistantIndex: -1
+    signal scrollToBottomRequested()
     property bool isRecordingVoice: false
     property bool isPinned: false
     property bool isPickingFile: false
@@ -99,6 +121,14 @@ PlasmoidItem {
         id: modelComboModel
     }
 
+    ListModel {
+        id: endpointComboModel
+    }
+
+    ListModel {
+        id: settingsModelsList
+    }
+
     // Representación compacta (icono para panel)
     compactRepresentation: MouseArea {
         id: compactArea
@@ -120,7 +150,7 @@ PlasmoidItem {
 
         Shortcut {
             sequence: "Escape"
-            enabled: root.activeXhr !== null
+            enabled: root.isBusy
             onActivated: root.cancelRequest()
         }
 
@@ -150,40 +180,106 @@ PlasmoidItem {
                     font.bold: true
                 }
 
-                // Selector de modelo Ollama
-                PlasmaComponents.ComboBox {
-                    id: modelCombo
-                    visible: root.ollamaConnected && modelComboModel.count > 0
-                    Layout.preferredWidth: Kirigami.Units.gridUnit * 9
+                // Indicador compacto clicable de endpoint + modelo activo (abre menú rápido al pulsar)
+                PlasmaComponents.ToolButton {
+                    id: activeModelBadge
                     Layout.fillWidth: true
-                    model: modelComboModel
-                    textRole: "text"
-                    currentIndex: {
-                        for (var i = 0; i < modelComboModel.count; i++) {
-                            if (modelComboModel.get(i).text === root.currentModel) return i;
+                    Layout.minimumWidth: Kirigami.Units.gridUnit * 5
+                    flat: true
+                    ToolTip.text: (root.activeEndpointName || root.ollamaUrl)
+                        + (root.currentModel ? ("\n" + root.tr("Model: ", "Modelo: ") + root.currentModel) : "")
+                        + "\n" + root.tr("Click to switch endpoint or model", "Pulsa para cambiar de endpoint o modelo")
+                    ToolTip.visible: hovered
+                    onClicked: {
+                        if (quickSwitchMenu.opened) {
+                            quickSwitchMenu.close()
+                        } else {
+                            quickSwitchMenu.popup(activeModelBadge, 0, activeModelBadge.height)
                         }
-                        return 0;
                     }
-                    onActivated: {
-                        root.currentModel = modelComboModel.get(index).text
+
+                    contentItem: RowLayout {
+                        spacing: Kirigami.Units.smallSpacing
+
+                        Rectangle {
+                            width: Kirigami.Units.gridUnit * 0.45
+                            height: width
+                            radius: width / 2
+                            color: root.ollamaConnected ? "#27ae60" : "#e74c3c"
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+
+                        PlasmaComponents.Label {
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                            font.pointSize: Kirigami.Theme.smallFont.pointSize
+                            opacity: 0.85
+                            text: {
+                                var epName = root.activeEndpointName || root.tr("Server", "Servidor")
+                                return root.currentModel ? (epName + " · " + root.currentModel) : epName
+                            }
+                        }
+
+                        Kirigami.Icon {
+                            source: "arrow-down"
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.small * 0.75
+                            Layout.preferredHeight: Kirigami.Units.iconSizes.small * 0.75
+                            opacity: 0.65
+                        }
                     }
-                }
 
-                // Indicador de estado de conexión con Ollama
-                Rectangle {
-                    width: Kirigami.Units.gridUnit * 0.5
-                    height: width
-                    radius: width / 2
-                    color: root.ollamaConnected ? "#27ae60" : "#e74c3c"
-                    Layout.alignment: Qt.AlignVCenter
-                    ToolTip.text: root.ollamaConnected ? root.tr("Connected to Ollama (127.0.0.1:11434)", "Conectado a Ollama (127.0.0.1:11434)") : root.tr("Ollama not reachable", "Ollama no disponible")
-                    ToolTip.visible: statusMouse.containsMouse
+                    Menu {
+                        id: quickSwitchMenu
+                        width: Math.max(activeModelBadge.width, Kirigami.Units.gridUnit * 13)
 
-                    MouseArea {
-                        id: statusMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: root.checkOllamaHealth()
+                        // Sección de Endpoints (si hay más de uno)
+                        Instantiator {
+                            model: root.endpoints.length > 1 ? endpointComboModel : null
+                            delegate: MenuItem {
+                                text: "🔌 " + model.name
+                                checkable: true
+                                checked: model.id === root.activeEndpointId
+                                onTriggered: root.selectEndpoint(model.id)
+                            }
+                            onObjectAdded: (index, object) => quickSwitchMenu.insertItem(index, object)
+                            onObjectRemoved: (index, object) => quickSwitchMenu.removeItem(object)
+                        }
+
+                        MenuSeparator {
+                            visible: root.endpoints.length > 1 && modelComboModel.count > 0
+                        }
+
+                        // Sección de Modelos del endpoint activo
+                        Instantiator {
+                            model: modelComboModel
+                            delegate: MenuItem {
+                                text: model.text
+                                checkable: true
+                                checked: model.text === root.currentModel
+                                onTriggered: {
+                                    root.currentModel = model.text
+                                    root.saveDefaultModelForActiveEndpoint(root.currentModel)
+                                }
+                            }
+                            onObjectAdded: (index, object) => {
+                                var offset = (root.endpoints.length > 1) ? (endpointComboModel.count + 1) : 0
+                                quickSwitchMenu.insertItem(offset + index, object)
+                            }
+                            onObjectRemoved: (index, object) => quickSwitchMenu.removeItem(object)
+                        }
+
+                        MenuSeparator {
+                            visible: modelComboModel.count > 0 || root.endpoints.length > 1
+                        }
+
+                        MenuItem {
+                            icon.name: "configure"
+                            text: root.tr("Manage endpoints…", "Gestionar endpoints…")
+                            onTriggered: {
+                                root.showSettings = true
+                                root.loadEndpointIntoSettings(root.activeEndpointId)
+                            }
+                        }
                     }
                 }
 
@@ -211,7 +307,12 @@ PlasmoidItem {
                     display: PlasmaComponents.AbstractButton.IconOnly
                     ToolTip.text: root.showSettings ? root.tr("Back to chat", "Volver al chat") : root.tr("Configure Bonsai", "Configurar Bonsai")
                     ToolTip.visible: hovered
-                    onClicked: root.showSettings = !root.showSettings
+                    onClicked: {
+                        root.showSettings = !root.showSettings
+                        if (root.showSettings) {
+                            root.loadEndpointIntoSettings(root.activeEndpointId)
+                        }
+                    }
                 }
             }
 
@@ -225,32 +326,37 @@ PlasmoidItem {
                 Layout.fillHeight: true
                 spacing: Kirigami.Units.smallSpacing
 
-                // Banner informativo si Ollama está detenido o sin modelos
+                // Banner / asistente de primer inicio si no hay servidor conectado o no hay modelos
                 Rectangle {
-                visible: !root.ollamaConnected || (root.ollamaConnected && root.availableModels.length === 0)
-                Layout.fillWidth: true
-                implicitHeight: warningRow.implicitHeight + 14
-                radius: 4
-                color: !root.ollamaConnected ? "#c0392b" : "#d35400"
-
-                RowLayout {
-                    id: warningRow
-                    anchors.fill: parent
-                    anchors.margins: 7
-                    spacing: Kirigami.Units.smallSpacing
+                    visible: !root.ollamaConnected || (root.ollamaConnected && root.availableModels.length === 0)
+                    Layout.fillWidth: true
+                    implicitHeight: onboardingColumn.implicitHeight + 16
+                    radius: 6
+                    color: !root.ollamaConnected
+                        ? ((root.isLocalOllama && !root.ollamaInstalled) ? "#2c3e50" : "#c0392b")
+                        : (root.isLocalOllama ? "#2c3e50" : "#d35400")
 
                     ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 2
+                        id: onboardingColumn
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        spacing: Kirigami.Units.smallSpacing
 
                         PlasmaComponents.Label {
                             Layout.fillWidth: true
                             font.bold: true
                             font.pointSize: Kirigami.Theme.smallFont.pointSize
                             color: "#ffffff"
-                            text: !root.ollamaConnected 
-                                  ? root.tr("⚠️ Ollama is not running on localhost:11434", "⚠️ Ollama no se está ejecutando en localhost:11434")
-                                  : root.tr("⚠️ No models downloaded in Ollama", "⚠️ No hay modelos descargados en Ollama")
+                            wrapMode: Text.Wrap
+                            text: !root.ollamaConnected
+                                  ? (root.isLocalOllama
+                                      ? (!root.ollamaInstalled
+                                          ? root.tr("🌱 Set up your AI backend", "🌱 Configura tu motor de IA")
+                                          : root.tr("⚠️ Ollama is not running on localhost:11434", "⚠️ Ollama no se está ejecutando en localhost:11434"))
+                                      : root.tr("⚠️ Cannot connect to AI server", "⚠️ No se puede conectar al servidor IA"))
+                                  : (root.isLocalOllama
+                                      ? root.tr("📦 Download a starter model", "📦 Descarga un modelo para empezar")
+                                      : root.tr("⚠️ No models available on server", "⚠️ No hay modelos disponibles en el servidor"))
                         }
 
                         PlasmaComponents.Label {
@@ -258,20 +364,104 @@ PlasmoidItem {
                             font.pointSize: Kirigami.Theme.smallFont.pointSize * 0.9
                             color: "#ffffff"
                             wrapMode: Text.Wrap
-                            text: !root.ollamaConnected 
-                                  ? root.tr("Click the button to start Ollama or run 'ollama serve'.", "Pulsa el botón para iniciar Ollama o ejecuta 'ollama serve'.")
-                                  : root.tr("Download the model: 'ollama pull bonsai-2:latest'", "Descarga el modelo: 'ollama pull bonsai-2:latest'")
+                            text: !root.ollamaConnected
+                                  ? (root.isLocalOllama
+                                      ? (!root.ollamaInstalled
+                                          ? root.tr("Install Ollama to run models privately on your PC, or connect a remote server (LiteLLM, OpenAI, vLLM…).", "Instala Ollama para ejecutar modelos en local con privacidad, o conecta un servidor remoto (LiteLLM, OpenAI, vLLM…).")
+                                          : root.tr("Start Ollama locally or configure a remote server.", "Inicia Ollama en local o configura un servidor remoto."))
+                                      : root.tr("Check the server URL and API key in Settings.", "Revisa la URL del servidor y la API key en Ajustes."))
+                                  : (root.isLocalOllama
+                                      ? root.tr("Pick a model to download directly with Ollama:", "Elige un modelo para descargarlo directamente con Ollama:")
+                                      : root.tr("Verify that the server exposes models at /v1/models.", "Verifica que el servidor exponga modelos en /v1/models."))
+                        }
+
+                        // Botones cuando no hay conexión
+                        RowLayout {
+                            visible: !root.ollamaConnected
+                            Layout.fillWidth: true
+                            spacing: Kirigami.Units.smallSpacing
+
+                            PlasmaComponents.Button {
+                                visible: root.isLocalOllama && !root.ollamaInstalled
+                                icon.name: "download"
+                                text: root.tr("Install Ollama", "Instalar Ollama")
+                                onClicked: root.installOllama()
+                            }
+
+                            PlasmaComponents.Button {
+                                visible: root.isLocalOllama && root.ollamaInstalled
+                                icon.name: "media-playback-start"
+                                text: root.tr("Start Ollama", "Iniciar Ollama")
+                                onClicked: root.startOllamaService()
+                            }
+
+                            PlasmaComponents.Button {
+                                icon.name: "configure"
+                                text: root.isLocalOllama
+                                    ? root.tr("Remote Server…", "Servidor remoto…")
+                                    : root.tr("Settings", "Ajustes")
+                                onClicked: root.showSettings = true
+                            }
+                        }
+
+                        // Selector y descarga directa cuando Ollama local está activo pero sin modelos
+                        RowLayout {
+                            visible: root.ollamaConnected && root.availableModels.length === 0 && root.isLocalOllama
+                            Layout.fillWidth: true
+                            spacing: Kirigami.Units.smallSpacing
+
+                            PlasmaComponents.ComboBox {
+                                id: starterModelCombo
+                                Layout.fillWidth: true
+                                enabled: !root.isPullingModel
+                                textRole: "text"
+                                model: [
+                                    { text: root.tr("bonsai-2:2b (Light / Vision + Tools)", "bonsai-2:2b (Ligero / Visión + Herramientas)"), value: "bonsai-2:2b" },
+                                    { text: root.tr("lfm3-omni:2b (Multimodal / Native Voice)", "lfm3-omni:2b (Multimodal / Voz nativa)"), value: "lfm3-omni:2b" },
+                                    { text: root.tr("qwen3:4b (Balanced / Best Tools)", "qwen3:4b (Equilibrado / Mejores herramientas)"), value: "qwen3:4b" }
+                                ]
+                            }
+
+                            PlasmaComponents.Button {
+                                visible: !root.isPullingModel
+                                icon.name: "download"
+                                text: root.tr("Download", "Descargar")
+                                onClicked: {
+                                    var sel = starterModelCombo.model[starterModelCombo.currentIndex]
+                                    if (sel && sel.value) {
+                                        root.pullModel(sel.value)
+                                    }
+                                }
+                            }
+
+                            PlasmaComponents.Button {
+                                visible: root.isPullingModel
+                                icon.name: "process-stop"
+                                text: root.tr("Cancel", "Cancelar")
+                                onClicked: root.cancelPullModel()
+                            }
+                        }
+
+                        // Barra de progreso durante la descarga del modelo
+                        ProgressBar {
+                            visible: root.isPullingModel
+                            Layout.fillWidth: true
+                            from: 0
+                            to: 100
+                            value: root.pullProgress >= 0 ? root.pullProgress : 0
+                            indeterminate: root.pullProgress < 0
+                        }
+
+                        PlasmaComponents.Label {
+                            visible: root.pullStatusText !== ""
+                            Layout.fillWidth: true
+                            font.pointSize: Kirigami.Theme.smallFont.pointSize * 0.85
+                            color: "#ecf0f1"
+                            wrapMode: Text.Wrap
+                            text: root.pullStatusText
                         }
                     }
-
-                    PlasmaComponents.Button {
-                        visible: !root.ollamaConnected
-                        icon.name: "media-playback-start"
-                        text: root.tr("Start", "Iniciar")
-                        onClicked: root.startOllamaService()
-                    }
                 }
-            }
 
             Rectangle {
                 Layout.fillWidth: true
@@ -297,6 +487,15 @@ PlasmoidItem {
                     Qt.callLater(function() {
                         chatListView.positionViewAtEnd()
                     })
+                }
+
+                Connections {
+                    target: root
+                    function onScrollToBottomRequested() {
+                        Qt.callLater(function() {
+                            chatListView.positionViewAtEnd()
+                        })
+                    }
                 }
 
                 delegate: Item {
@@ -520,7 +719,7 @@ PlasmoidItem {
 
                 PlasmaComponents.ToolButton {
                     id: cancelBtn
-                    visible: root.activeXhr !== null
+                    visible: root.isBusy
                     icon.name: "process-stop"
                     text: root.tr("Stop", "Parar")
                     ToolTip.text: root.tr("Cancel the current request (Esc)", "Cancelar la petición actual (Esc)")
@@ -635,9 +834,95 @@ PlasmoidItem {
                     width: parent.width
                     spacing: Kirigami.Units.mediumSpacing
 
-                    // 1. Ollama URL
+                    // 1. Selector y gestión de Endpoints
                     PlasmaComponents.Label {
-                        text: root.tr("Ollama Server URL:", "URL del Servidor Ollama:")
+                        text: root.tr("AI Endpoints:", "Servidores IA (Endpoints):")
+                        font.bold: true
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Kirigami.Units.smallSpacing
+
+                        PlasmaComponents.ComboBox {
+                            id: settingsEndpointCombo
+                            Layout.fillWidth: true
+                            model: endpointComboModel
+                            textRole: "name"
+                            currentIndex: {
+                                for (var i = 0; i < endpointComboModel.count; i++) {
+                                    if (endpointComboModel.get(i).id === root.editingEndpointId) return i
+                                }
+                                return 0
+                            }
+                            onActivated: {
+                                var item = endpointComboModel.get(index)
+                                if (item && item.id) {
+                                    root.loadEndpointIntoSettings(item.id)
+                                }
+                            }
+                        }
+
+                        PlasmaComponents.ToolButton {
+                            icon.name: "list-add"
+                            ToolTip.text: root.tr("Add new endpoint", "Añadir nuevo endpoint")
+                            ToolTip.visible: hovered
+                            onClicked: {
+                                var hasLocalOllama = false
+                                for (var i = 0; i < root.endpoints.length; i++) {
+                                    if (Agent.isLocalOllamaUrl(root.endpoints[i].url)) {
+                                        hasLocalOllama = true
+                                        break
+                                    }
+                                }
+                                var newId = "ep_" + Date.now()
+                                root.endpoints = Agent.upsertEndpoint(root.endpoints, {
+                                    "id": newId,
+                                    "name": hasLocalOllama ? root.tr("New Server", "Nuevo servidor") : "Ollama Local",
+                                    "url": hasLocalOllama ? "http://localhost:4000" : "http://127.0.0.1:11434",
+                                    "apiKey": "",
+                                    "defaultModel": ""
+                                })
+                                root.syncEndpointComboModel()
+                                root.loadEndpointIntoSettings(newId)
+                            }
+                        }
+
+                        PlasmaComponents.ToolButton {
+                            icon.name: "edit-delete"
+                            enabled: root.endpoints.length > 1
+                            ToolTip.text: root.tr("Delete selected endpoint", "Eliminar endpoint seleccionado")
+                            ToolTip.visible: hovered
+                            onClicked: {
+                                var targetId = root.editingEndpointId || root.activeEndpointId
+                                root.endpoints = Agent.deleteEndpoint(root.endpoints, targetId)
+                                root.persistEndpoints()
+                                root.syncEndpointComboModel()
+                                var nextEp = Agent.findEndpointById(root.endpoints, root.activeEndpointId)
+                                if (nextEp) {
+                                    root.selectEndpoint(nextEp.id)
+                                    root.loadEndpointIntoSettings(nextEp.id)
+                                }
+                            }
+                        }
+                    }
+
+                    // 1a. Nombre del Endpoint
+                    PlasmaComponents.Label {
+                        text: root.tr("Endpoint Name:", "Nombre del endpoint:")
+                        font.bold: true
+                    }
+
+                    PlasmaComponents.TextField {
+                        id: settingsNameInput
+                        Layout.fillWidth: true
+                        text: root.getEditingEndpointField("name")
+                        placeholderText: "Ollama Local / LiteLLM"
+                    }
+
+                    // 1b. URL del Servidor (Ollama, LiteLLM, vLLM, OpenAI-compatible)
+                    PlasmaComponents.Label {
+                        text: root.tr("Server URL (Ollama / LiteLLM / OpenAI):", "URL del servidor (Ollama / LiteLLM / OpenAI):")
                         font.bold: true
                     }
 
@@ -648,18 +933,110 @@ PlasmoidItem {
                         PlasmaComponents.TextField {
                             id: settingsUrlInput
                             Layout.fillWidth: true
-                            text: root.ollamaUrl
+                            text: root.getEditingEndpointField("url")
                             placeholderText: "http://127.0.0.1:11434"
                         }
 
                         PlasmaComponents.Button {
-                            text: root.tr("Test", "Probar")
+                            id: settingsTestButton
+                            enabled: root.connectionTestStatus !== "testing"
+                            text: root.connectionTestStatus === "testing" ? root.tr("Testing…", "Probando…") : root.tr("Test", "Probar")
                             icon.name: "network-connect"
                             onClicked: {
-                                root.ollamaUrl = settingsUrlInput.text.trim() || "http://127.0.0.1:11434"
-                                root.checkOllamaHealth()
+                                var testUrl = settingsUrlInput.text.trim() || "http://127.0.0.1:11434"
+                                var testKey = settingsApiKeyInput.text.trim()
+                                root.connectionTestStatus = "testing"
+                                root.connectionTestMessage = root.tr("Testing connection to " + Agent.buildModelsUrl(testUrl) + "…", "Probando conexión a " + Agent.buildModelsUrl(testUrl) + "…")
+                                root.testEndpointConnection(testUrl, testKey, function(ok, status, detail, names) {
+                                    if (ok) {
+                                        root.populateSettingsModelsList(names || [], root.editingDefaultModel)
+                                        root.connectionTestStatus = "ok"
+                                        root.connectionTestMessage = root.tr(
+                                            "✓ Connected (" + detail + " models found)",
+                                            "✓ Conectado (" + detail + " modelos encontrados)"
+                                        )
+                                    } else {
+                                        root.connectionTestStatus = "error"
+                                        if (status === 401 || status === 403) {
+                                            root.connectionTestMessage = root.tr(
+                                                "✗ Authentication failed (HTTP " + status + "). Check your API key.",
+                                                "✗ Error de autenticación (HTTP " + status + "). Revisa tu API Key."
+                                            )
+                                        } else if (status === 404) {
+                                            root.connectionTestMessage = root.tr(
+                                                "✗ Endpoint /v1/models not found (HTTP 404). Check the URL.",
+                                                "✗ Endpoint /v1/models no encontrado (HTTP 404). Revisa la URL."
+                                            )
+                                        } else if (status === 0) {
+                                            root.connectionTestMessage = root.tr(
+                                                "✗ Could not reach server (timeout or network error).",
+                                                "✗ No se pudo conectar con el servidor (tiempo agotado o error de red)."
+                                            )
+                                        } else if (detail === "invalid_json") {
+                                            root.connectionTestMessage = root.tr(
+                                                "✗ Server replied, but not with valid JSON.",
+                                                "✗ El servidor respondió, pero no con JSON válido."
+                                            )
+                                        } else {
+                                            root.connectionTestMessage = root.tr(
+                                                "✗ Server error (HTTP " + status + ").",
+                                                "✗ Error del servidor (HTTP " + status + ")."
+                                            )
+                                        }
+                                    }
+                                })
                             }
                         }
+                    }
+
+                    // 1c. API Key (opcional para servidores remotos)
+                    PlasmaComponents.Label {
+                        text: root.tr("API Key (optional):", "API Key (opcional):")
+                        font.bold: true
+                    }
+
+                    PlasmaComponents.TextField {
+                        id: settingsApiKeyInput
+                        Layout.fillWidth: true
+                        text: root.getEditingEndpointField("apiKey")
+                        echoMode: TextInput.Password
+                        placeholderText: "sk-..."
+                    }
+
+                    // 1d. Modelo por defecto para este endpoint (desplegable con modelos detectados)
+                    PlasmaComponents.Label {
+                        text: root.tr("Default Model for this endpoint:", "Modelo por defecto para este endpoint:")
+                        font.bold: true
+                    }
+
+                    PlasmaComponents.ComboBox {
+                        id: settingsDefaultModelCombo
+                        Layout.fillWidth: true
+                        model: settingsModelsList
+                        textRole: "text"
+                        currentIndex: {
+                            for (var i = 0; i < settingsModelsList.count; i++) {
+                                if (settingsModelsList.get(i).value === root.editingDefaultModel) return i
+                            }
+                            return 0
+                        }
+                        onActivated: {
+                            var item = settingsModelsList.get(index)
+                            root.editingDefaultModel = item ? item.value : ""
+                        }
+                    }
+
+                    // Resultado del botón Probar
+                    PlasmaComponents.Label {
+                        visible: root.connectionTestMessage !== ""
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        font.bold: root.connectionTestStatus !== "testing"
+                        color: root.connectionTestStatus === "ok"
+                            ? "#27ae60"
+                            : (root.connectionTestStatus === "error" ? "#e74c3c" : Kirigami.Theme.disabledTextColor)
+                        text: root.connectionTestMessage
                     }
 
                     // 2. Idioma de Respuesta
@@ -714,14 +1091,26 @@ PlasmoidItem {
                             text: root.tr("Save Settings", "Guardar ajustes")
                             Layout.fillWidth: true
                             onClicked: {
-                                var newUrl = settingsUrlInput.text.trim() || "http://127.0.0.1:11434"
-                                root.ollamaUrl = newUrl
+                                var epId = root.editingEndpointId || root.activeEndpointId || "default"
+                                var epUrl = settingsUrlInput.text.trim() || "http://127.0.0.1:11434"
+                                var epName = settingsNameInput.text.trim()
+                                var epKey = settingsApiKeyInput.text.trim()
+                                var epDefModel = root.editingDefaultModel.trim()
+
+                                root.endpoints = Agent.upsertEndpoint(root.endpoints, {
+                                    "id": epId,
+                                    "name": epName,
+                                    "url": epUrl,
+                                    "apiKey": epKey,
+                                    "defaultModel": epDefModel
+                                })
+                                root.syncEndpointComboModel()
+
                                 var sel = settingsLangCombo.model[settingsLangCombo.currentIndex]
                                 root.preferredLanguage = sel ? sel.value : "auto"
                                 root.customSystemPrompt = settingsCustomPromptInput.text.trim()
 
                                 if (Plasmoid.configuration) {
-                                    Plasmoid.configuration.ollamaUrl = root.ollamaUrl
                                     Plasmoid.configuration.preferredLanguage = root.preferredLanguage
                                     Plasmoid.configuration.customSystemPrompt = root.customSystemPrompt
                                 }
@@ -730,8 +1119,9 @@ PlasmoidItem {
                                     chatModel.setProperty(0, "text", root.getWelcomeMessage())
                                 }
 
-                                root.checkOllamaHealth()
-                                root.fetchModels()
+                                root.connectionTestStatus = ""
+                                root.connectionTestMessage = ""
+                                root.selectEndpoint(epId)
                                 root.showSettings = false
                             }
                         }
@@ -790,24 +1180,55 @@ PlasmoidItem {
         return root.tr("Ask or request an action from Bonsai…", "Pregunta o pide una acción a Bonsai…")
     }
 
+    function finalizeCancelled(assistantIndex) {
+        if (!root.isBusy) return
+        root.isBusy = false
+        root.busyStatus = "thinking"
+        root.activeXhr = null
+        root.cancelRequested = false
+
+        if (assistantIndex < 0 || assistantIndex >= chatModel.count) return
+        var partial = chatModel.get(assistantIndex).text
+        if (partial === "") {
+            chatModel.setProperty(assistantIndex, "text", root.tr("⏹ Request cancelled.", "⏹ Petición cancelada."))
+            // Sin respuesta: retirar la pregunta o mensajes de herramienta sin cerrar
+            if (root.conversationHistory.length > 0 && root.conversationHistory[root.conversationHistory.length - 1].role === "user") {
+                root.conversationHistory.pop()
+            } else if (root.conversationHistory.length > 0 && root.conversationHistory[root.conversationHistory.length - 1].role === "tool") {
+                root.conversationHistory.push({"role": "assistant", "content": root.tr("[Request cancelled]", "[Petición cancelada]")})
+            }
+        } else {
+            chatModel.setProperty(assistantIndex, "text", partial + "\n\n" + root.tr("⏹ _(cancelled)_", "⏹ _(cancelado)_"))
+            root.conversationHistory.push({"role": "assistant", "content": partial})
+        }
+    }
+
     function cancelRequest() {
-        if (root.activeXhr === null) return
+        if (!root.isBusy && root.activeXhr === null) return
+        root.requestGeneration++
         root.cancelRequested = true
-        root.activeXhr.abort()
+        if (root.activeXhr !== null) {
+            root.activeXhr.abort()
+        } else {
+            root.finalizeCancelled(root.activeAssistantIndex)
+        }
         root.unloadModel()
     }
 
     // Ollama no interrumpe el procesado del prompt al cerrarse la conexión:
     // descargar el modelo (keep_alive: 0) detiene el runner y libera la CPU.
     function unloadModel() {
-        if (root.currentModel === "") return
+        if (!root.isLocalOllama || root.currentModel === "") return
         var x = new XMLHttpRequest()
-        x.open("POST", root.ollamaUrl + "/api/generate")
+        x.open("POST", Agent.normalizeBaseUrl(root.ollamaUrl) + "/api/generate")
         x.setRequestHeader("Content-Type", "application/json")
         x.send(JSON.stringify({"model": root.currentModel, "keep_alive": 0}))
     }
 
     function getThinkingText() {
+        if (root.busyStatus === "running_tool") {
+            return root.tr("Bonsai is running tool…", "Bonsai está ejecutando herramienta…")
+        }
         return root.tr("Bonsai is thinking…", "Bonsai está pensando…")
     }
 
@@ -825,8 +1246,206 @@ PlasmoidItem {
             "toolInfo": ""
         })
 
-        // Cargar esquema de herramientas del sistema
+        // Inicializar endpoints configurados, esquema de herramientas y comprobar si Ollama está instalado
+        root.initEndpoints()
         root.loadToolSchema()
+        root.checkOllamaInstalled()
+    }
+
+    function initEndpoints() {
+        var epJson = (Plasmoid.configuration && Plasmoid.configuration.endpointsJson) ? Plasmoid.configuration.endpointsJson : ""
+        var savedActive = (Plasmoid.configuration && Plasmoid.configuration.activeEndpointId) ? Plasmoid.configuration.activeEndpointId : ""
+        var legacyUrl = (Plasmoid.configuration && Plasmoid.configuration.ollamaUrl) ? Plasmoid.configuration.ollamaUrl : "http://127.0.0.1:11434"
+        var legacyKey = (Plasmoid.configuration && Plasmoid.configuration.apiKey) ? Plasmoid.configuration.apiKey : ""
+        var legacyModel = (Plasmoid.configuration && Plasmoid.configuration.defaultModel) ? Plasmoid.configuration.defaultModel : ""
+
+        root.endpoints = Agent.loadEndpoints(epJson, legacyUrl, legacyKey, legacyModel)
+        root.syncEndpointComboModel()
+
+        var active = Agent.findEndpointById(root.endpoints, savedActive)
+        if (active) {
+            root.activeEndpointId = active.id
+            root.editingEndpointId = active.id
+            root.ollamaUrl = active.url
+            root.apiKey = active.apiKey
+            root.currentModel = active.defaultModel || ""
+        }
+    }
+
+    function syncEndpointComboModel() {
+        endpointComboModel.clear()
+        for (var i = 0; i < root.endpoints.length; i++) {
+            endpointComboModel.append({
+                "id": root.endpoints[i].id,
+                "name": root.endpoints[i].name
+            })
+        }
+    }
+
+    function persistEndpoints() {
+        if (Plasmoid.configuration) {
+            Plasmoid.configuration.endpointsJson = JSON.stringify(root.endpoints)
+            Plasmoid.configuration.activeEndpointId = root.activeEndpointId
+            Plasmoid.configuration.ollamaUrl = root.ollamaUrl
+            Plasmoid.configuration.apiKey = root.apiKey
+        }
+    }
+
+    function getEditingEndpointField(field) {
+        var ep = Agent.findEndpointById(root.endpoints, root.editingEndpointId || root.activeEndpointId)
+        return (ep && ep[field] !== undefined) ? String(ep[field]) : ""
+    }
+
+    function populateSettingsModelsList(names, selectedModel) {
+        settingsModelsList.clear()
+        settingsModelsList.append({
+            "text": root.tr("Auto (first available)", "Automático (primero disponible)"),
+            "value": ""
+        })
+        var foundSelected = (selectedModel === "")
+        for (var i = 0; i < names.length; i++) {
+            settingsModelsList.append({ "text": names[i], "value": names[i] })
+            if (names[i] === selectedModel) foundSelected = true
+        }
+        if (!foundSelected && selectedModel !== "") {
+            settingsModelsList.append({ "text": selectedModel, "value": selectedModel })
+        }
+    }
+
+    function loadEndpointIntoSettings(epId) {
+        root.editingEndpointId = epId
+        var ep = Agent.findEndpointById(root.endpoints, epId)
+        root.editingDefaultModel = ep ? (ep.defaultModel || "") : ""
+        root.connectionTestStatus = ""
+        root.connectionTestMessage = ""
+        root.populateSettingsModelsList(
+            (ep && ep.id === root.activeEndpointId) ? (root.availableModels || []) : [],
+            root.editingDefaultModel
+        )
+        if (ep && ep.url) {
+            var targetId = ep.id
+            root.testEndpointConnection(ep.url, ep.apiKey, function(ok, status, detail, names) {
+                if (ok && root.editingEndpointId === targetId) {
+                    root.populateSettingsModelsList(names || [], root.editingDefaultModel)
+                }
+            })
+        }
+    }
+
+    function selectEndpoint(epId) {
+        var ep = Agent.findEndpointById(root.endpoints, epId)
+        if (!ep) return
+        root.activeEndpointId = ep.id
+        root.editingEndpointId = ep.id
+        root.ollamaUrl = ep.url
+        root.apiKey = ep.apiKey
+        root.currentModel = ep.defaultModel || ""
+        root.availableModels = []
+        modelComboModel.clear()
+        root.persistEndpoints()
+        root.checkOllamaHealth()
+    }
+
+    function saveDefaultModelForActiveEndpoint(modelName) {
+        var ep = Agent.findEndpointById(root.endpoints, root.activeEndpointId)
+        if (!ep || ep.defaultModel === modelName) return
+        root.endpoints = Agent.upsertEndpoint(root.endpoints, {
+            "id": ep.id,
+            "name": ep.name,
+            "url": ep.url,
+            "apiKey": ep.apiKey,
+            "defaultModel": modelName
+        })
+        root.persistEndpoints()
+    }
+
+    function testEndpointConnection(url, apiKey, onResult) {
+        var xhr = new XMLHttpRequest()
+        xhr.open("GET", Agent.buildModelsUrl(url))
+        var key = (apiKey || "").trim()
+        if (key !== "") {
+            xhr.setRequestHeader("Authorization", "Bearer " + key)
+        }
+        xhr.timeout = 6000
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                if (xhr.status === 200) {
+                    try {
+                        var names = Agent.parseModelsResponse(xhr.responseText)
+                        if (onResult) onResult(true, 200, names.length, names)
+                    } catch (e) {
+                        if (onResult) onResult(false, 200, "invalid_json", [])
+                    }
+                } else {
+                    if (onResult) onResult(false, xhr.status, xhr.responseText || "", [])
+                }
+            }
+        }
+        xhr.send()
+    }
+
+    function checkOllamaInstalled() {
+        root.runCli("python3 '" + root.toolsScriptPath + "' check_ollama", (code, stdout) => {
+            if (code === 0 && stdout.trim() !== "") {
+                try {
+                    var res = JSON.parse(stdout.trim())
+                    root.ollamaInstalled = !!res.installed
+                } catch (e) {}
+            }
+        })
+    }
+
+    function installOllama() {
+        root.runCli("python3 '" + root.toolsScriptPath + "' install_ollama", (code, stdout) => {
+            try {
+                var res = JSON.parse((stdout || "").trim())
+                if (!res.success && res.error) {
+                    root.pullStatusText = res.error
+                }
+            } catch (e) {}
+        })
+    }
+
+    function pullModel(modelName) {
+        if (!modelName || root.isPullingModel) return
+        root.isPullingModel = true
+        root.pullProgress = -1
+        root.pullStatusText = root.tr("Starting download of " + modelName + "…", "Iniciando descarga de " + modelName + "…")
+
+        Agent.pullOllamaModel({
+            "ollamaUrl": root.ollamaUrl,
+            "model": modelName,
+            "onXhrCreated": function(xhr) {
+                root.activePullXhr = xhr
+            },
+            "onProgress": function(statusText, percent) {
+                root.pullProgress = percent
+                root.pullStatusText = (percent >= 0) ? (statusText + " (" + percent + "%)") : statusText
+            },
+            "onComplete": function() {
+                root.isPullingModel = false
+                root.activePullXhr = null
+                root.pullProgress = 100
+                root.pullStatusText = ""
+                root.checkOllamaHealth()
+            },
+            "onError": function(errMsg) {
+                root.isPullingModel = false
+                root.activePullXhr = null
+                root.pullProgress = -1
+                if (errMsg === "cancelled") {
+                    root.pullStatusText = root.tr("Download cancelled.", "Descarga cancelada.")
+                } else {
+                    root.pullStatusText = root.tr("Download failed: " + errMsg, "Error en la descarga: " + errMsg)
+                }
+            }
+        })
+    }
+
+    function cancelPullModel() {
+        if (root.activePullXhr !== null) {
+            root.activePullXhr.abort()
+        }
     }
 
     function copyToClipboard(text) {
@@ -862,25 +1481,47 @@ PlasmoidItem {
                 }
             })
         } else {
-            // Detener captura y transcribir con Whisper
+            // Detener captura: enviar audio directo si el modelo soporta audio nativo,
+            // o transcribir con Whisper (con fallback a audio nativo si Whisper no está instalado)
             root.isRecordingVoice = false
             root.isBusy = true
             root.runCli("python3 '" + root.toolsScriptPath + "' record stop", (code, stdout) => {
+                var sendNativeAudio = function() {
+                    root.runCli("python3 '" + root.toolsScriptPath + "' read_audio", (codeA, stdoutA) => {
+                        root.isBusy = false
+                        try {
+                            var resA = JSON.parse((stdoutA || "").trim())
+                            if (resA.success && resA.base64_audio) {
+                                root.sendMessage("", resA.base64_audio)
+                            }
+                        } catch (e) {}
+                    })
+                }
+
+                if (Agent.isNativeAudioModel(root.currentModel)) {
+                    sendNativeAudio()
+                    return
+                }
+
                 root.runCli("python3 '" + root.toolsScriptPath + "' transcribe", (code2, stdout2) => {
-                    root.isBusy = false
                     try {
-                        var res2 = JSON.parse(stdout2.trim())
+                        var res2 = JSON.parse((stdout2 || "").trim())
                         if (res2.success && res2.text && res2.text.trim() !== "") {
-                            var spokenText = res2.text.trim()
-                            root.sendMessage(spokenText)
+                            root.isBusy = false
+                            root.sendMessage(res2.text.trim())
                         } else if (res2.not_installed) {
+                            root.isBusy = false
                             chatModel.append({
                                 "role": "assistant",
-                                "text": root.tr("Whisper Speech-to-Text is not installed. You can install it with: ./scripts/install-voice.sh", "Whisper Speech-to-Text no está instalado. Puedes instalarlo ejecutando: ./scripts/install-voice.sh"),
+                                "text": root.tr("Whisper Speech-to-Text is not installed. You can either use a native audio model (like lfm3-omni:2b) or install Whisper with: ./scripts/install-voice.sh", "Whisper Speech-to-Text no está instalado. Puedes usar un modelo con audio nativo (como lfm3-omni:2b) o instalar Whisper ejecutando: ./scripts/install-voice.sh"),
                                 "toolInfo": ""
                             })
+                        } else {
+                            root.isBusy = false
                         }
-                    } catch (e) {}
+                    } catch (e) {
+                        root.isBusy = false
+                    }
                 })
             })
         }
@@ -918,48 +1559,57 @@ PlasmoidItem {
         })
     }
 
-    function checkOllamaHealth() {
+    function checkOllamaHealth(onResult) {
         var xhr = new XMLHttpRequest()
-        xhr.open("GET", root.ollamaUrl + "/api/tags")
-        xhr.timeout = 3000
+        xhr.open("GET", Agent.buildModelsUrl(root.ollamaUrl))
+        var key = (root.apiKey || "").trim()
+        if (key !== "") {
+            xhr.setRequestHeader("Authorization", "Bearer " + key)
+        }
+        xhr.timeout = onResult ? 6000 : 3000
         xhr.onreadystatechange = function() {
             if (xhr.readyState === XMLHttpRequest.DONE) {
-                root.ollamaConnected = (xhr.status === 200)
                 if (xhr.status === 200) {
                     try {
-                        var d = JSON.parse(xhr.responseText)
-                        var list = d.models || []
-                        var names = []
-                        for (var i = 0; i < list.length; i++) {
-                            names.push(list[i].name)
-                        }
+                        var names = Agent.parseModelsResponse(xhr.responseText)
+                        root.ollamaConnected = true
                         root.availableModels = names
 
                         if (names.length > 0) {
-                            if (modelComboModel.count !== names.length) {
+                            var needsRebuild = (modelComboModel.count !== names.length)
+                            if (!needsRebuild) {
+                                for (var m = 0; m < names.length; m++) {
+                                    if (modelComboModel.get(m).text !== names[m]) {
+                                        needsRebuild = true
+                                        break
+                                    }
+                                }
+                            }
+                            if (needsRebuild) {
                                 modelComboModel.clear()
                                 for (var j = 0; j < names.length; j++) {
                                     modelComboModel.append({"text": names[j]})
                                 }
                             }
-                            if (root.currentModel === "" || names.indexOf(root.currentModel) === -1) {
-                                // Preferir el modelo de la familia bonsai si existe
-                                var preferred = names[0]
-                                for (var k = 0; k < names.length; k++) {
-                                    if (names[k].indexOf("bonsai") !== -1) {
-                                        preferred = names[k]
-                                        break
-                                    }
-                                }
-                                root.currentModel = preferred
+                            var activeEp = Agent.findEndpointById(root.endpoints, root.activeEndpointId)
+                            var epDefModel = activeEp ? activeEp.defaultModel : ""
+                            var picked = Agent.pickPreferredModel(names, epDefModel, root.currentModel)
+                            if (picked !== root.currentModel) {
+                                root.currentModel = picked
                             }
                         } else {
                             modelComboModel.clear()
                             root.currentModel = ""
                         }
+                        if (onResult) onResult(true, 200, names.length)
                     } catch (e) {
-                        console.error("Error parsing Ollama tags: " + e)
+                        console.error("Error parsing model list: " + e)
+                        root.ollamaConnected = false
+                        if (onResult) onResult(false, 200, "invalid_json")
                     }
+                } else {
+                    root.ollamaConnected = false
+                    if (onResult) onResult(false, xhr.status, xhr.responseText || "")
                 }
             }
         }
@@ -967,6 +1617,15 @@ PlasmoidItem {
     }
 
     function clearChat() {
+        root.requestGeneration++
+        if (root.activeXhr !== null) {
+            root.cancelRequested = true
+            root.activeXhr.abort()
+            root.activeXhr = null
+        }
+        root.isBusy = false
+        root.busyStatus = "thinking"
+        root.activeAssistantIndex = -1
         chatModel.clear()
         root.conversationHistory = []
         root.clearAttachment()
@@ -1031,11 +1690,12 @@ PlasmoidItem {
         })
     }
 
-    function sendMessage(text) {
+    function sendMessage(text, audioB64) {
         text = (text || "").trim()
         var hasDoc = (root.attachedFileType === "document" && root.attachedFileText !== "")
         var hasImg = (root.capturedImageB64 !== "")
-        if (text === "" && !hasImg && !hasDoc) {
+        var hasAudio = !!(audioB64 && String(audioB64).trim() !== "")
+        if (text === "" && !hasImg && !hasDoc && !hasAudio) {
             return
         }
 
@@ -1045,6 +1705,8 @@ PlasmoidItem {
             userDisplayText = docPrefix + (text !== "" ? text : root.tr("Please analyze or summarize this document.", "Por favor analiza o resume este documento."))
         } else if (hasImg && text === "") {
             userDisplayText = (root.attachedFileName !== "") ? ("🖼️ **[" + root.attachedFileName + "]**") : root.tr("[Screenshot attached]", "[Captura de pantalla adjunta]")
+        } else if (hasAudio && text === "") {
+            userDisplayText = root.tr("🎤 [Voice message]", "🎤 [Mensaje de voz]")
         }
 
         chatModel.append({
@@ -1062,6 +1724,8 @@ PlasmoidItem {
                                  + (text !== "" ? text : "Por favor resume y analiza el contenido de este documento adjunto.")
         } else if (hasImg && text === "") {
             userMessageContent = "Por favor analiza la imagen adjunta."
+        } else if (hasAudio && text === "") {
+            userMessageContent = root.tr("Listen to the attached audio message and respond or execute the requested action.", "Escucha el mensaje de voz adjunto y responde o ejecuta la acción solicitada.")
         }
 
         var userMessageObj = {
@@ -1071,168 +1735,114 @@ PlasmoidItem {
         if (hasImg) {
             userMessageObj["images"] = [root.capturedImageB64]
         }
+        if (hasAudio) {
+            userMessageObj["audio"] = String(audioB64)
+            userMessageObj["audioFormat"] = "wav"
+        }
         root.conversationHistory.push(userMessageObj)
         root.clearAttachment()
+        root.requestGeneration++
+        var myGen = root.requestGeneration
+        root.cancelRequested = false
+        root.busyStatus = "thinking"
         root.isBusy = true
 
         var assistantIndex = chatModel.count
+        root.activeAssistantIndex = assistantIndex
         chatModel.append({
             "role": "assistant",
             "text": "",
             "toolInfo": ""
         })
 
-        // Preparar payload para Ollama directo
-        var activeLang = (root.preferredLanguage && root.preferredLanguage !== "auto") 
-                         ? root.preferredLanguage 
+        var activeLang = (root.preferredLanguage && root.preferredLanguage !== "auto")
+                         ? root.preferredLanguage
                          : root.detectLanguage(text)
-
-        var systemContent = ""
-        if (activeLang === "en") {
-            systemContent = "You are Bonsai, a smart local AI assistant integrated into the KDE Plasma 6 desktop. You have access to system tools to interact with the environment: control brightness, volume, timers, launch applications, lock session, organize windows, create folders in the file system, find or open documents/files on the computer, read file contents (PDF, text, code), and manage the clipboard. When the user asks you to perform an action or read/find a file, always invoke the appropriate tool immediately.\nIMPORTANT: Always reply to the user strictly in English."
-        } else {
-            systemContent = "Eres Bonsai, un asistente local inteligente integrado en el escritorio KDE Plasma 6. Tienes acceso a herramientas del sistema para interactuar con el entorno: controlar brillo, volumen, temporizadores, abrir aplicaciones, bloquear sesión, organizar ventanas, crear carpetas en el sistema de archivos, buscar o abrir documentos/archivos en el equipo, leer contenido de archivos (PDF, texto, código) y gestionar el portapapeles. Si el usuario te pide una acción o leer/buscar un documento, invoca siempre la herramienta adecuada de inmediato.\nIMPORTANTE: Responde siempre al usuario estrictamente en español."
-        }
-
         var customPrompt = (Plasmoid.configuration && Plasmoid.configuration.customSystemPrompt) ? Plasmoid.configuration.customSystemPrompt.trim() : ""
-        if (customPrompt !== "") {
-            systemContent += "\n" + (activeLang === "en" ? "Custom user instructions:\n" : "Instrucciones personalizadas del usuario:\n") + customPrompt
-        }
+        var systemContent = Agent.buildSystemPrompt(activeLang, customPrompt)
 
-        var messagesToSend = []
-        messagesToSend.push({
-            "role": "system",
-            "content": systemContent
-        })
-        for (var h = 0; h < root.conversationHistory.length; h++) {
-            messagesToSend.push(root.conversationHistory[h])
-        }
-
-        var payload = {
+        Agent.runChatLoop({
+            "ollamaUrl": root.ollamaUrl,
+            "apiKey": root.apiKey,
             "model": root.currentModel,
-            "messages": messagesToSend,
-            "stream": true
-        }
-
-        // Añadir herramientas si el modelo actual las soporta o si están cargadas
-        if (root.toolDefinitions && root.toolDefinitions.length > 0) {
-            payload["tools"] = root.toolDefinitions
-        }
-
-        var xhr = new XMLHttpRequest()
-        xhr.open("POST", root.ollamaUrl + "/api/chat")
-        xhr.setRequestHeader("Content-Type", "application/json")
-        xhr.timeout = 240000
-
-        var lastProcessed = 0
-        var accumulatedToolCalls = []
-        root.cancelRequested = false
-        root.activeXhr = xhr
-
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === 3 || xhr.readyState === 4) {
-                var fullResponse = xhr.responseText || ""
-                var unread = fullResponse.substring(lastProcessed)
-                var lines = unread.split("\n")
-
-                if (xhr.readyState === 3) {
-                    var remaining = lines.pop()
-                    lastProcessed = fullResponse.length - remaining.length
-                } else {
-                    lastProcessed = fullResponse.length
+            "systemPrompt": systemContent,
+            "lang": activeLang,
+            "tools": root.toolDefinitions || [],
+            "getHistory": function() {
+                return root.conversationHistory
+            },
+            "appendHistory": function(msg) {
+                root.conversationHistory.push(msg)
+            },
+            "isCancelled": function() {
+                return root.cancelRequested || myGen !== root.requestGeneration
+            },
+            "onXhrCreated": function(xhr) {
+                if (myGen === root.requestGeneration) {
+                    root.activeXhr = xhr
                 }
-
-                for (var i = 0; i < lines.length; i++) {
-                    var line = lines[i].trim()
-                    if (line !== "") {
-                        try {
-                            var data = JSON.parse(line)
-                            if (data.message) {
-                                if (data.message.content) {
-                                    var curText = chatModel.get(assistantIndex).text
-                                    chatModel.setProperty(assistantIndex, "text", curText + data.message.content)
-                                    chatListView.positionViewAtEnd()
-                                }
-                                if (data.message.tool_calls && data.message.tool_calls.length > 0) {
-                                    for (var t = 0; t < data.message.tool_calls.length; t++) {
-                                        accumulatedToolCalls.push(data.message.tool_calls[t])
-                                    }
-                                }
-                            }
-                            if (data.done) {
-                                root.isBusy = false
-                            }
-                        } catch (e) {}
-                    }
+            },
+            "onStatusChange": function(status) {
+                if (myGen === root.requestGeneration) {
+                    root.busyStatus = status
                 }
-            }
-
-            if (xhr.readyState === 4) {
+            },
+            "onToken": function(delta) {
+                if (myGen !== root.requestGeneration) return
+                var curText = chatModel.get(assistantIndex).text
+                chatModel.setProperty(assistantIndex, "text", curText + delta)
+                root.scrollToBottomRequested()
+            },
+            "executeTool": function(fnName, argsObj, lang, done) {
+                var safeName = String(fnName || "").replace(/[^a-zA-Z0-9_]/g, "")
+                var fnArgs = JSON.stringify(argsObj || {})
+                var safeArgs = fnArgs.replace(/'/g, "'\\''")
+                root.runCli(
+                    "python3 '" + root.toolsScriptPath + "' --lang " + lang + " call " + safeName + " '" + safeArgs + "'",
+                    done
+                )
+            },
+            "onToolExecuted": function(fnName, resObj, pillMsg) {
+                if (myGen !== root.requestGeneration) return
+                var curTools = chatModel.get(assistantIndex).toolInfo
+                var updated = curTools ? (curTools + " • " + pillMsg) : pillMsg
+                chatModel.setProperty(assistantIndex, "toolInfo", updated)
+                root.scrollToBottomRequested()
+            },
+            "onComplete": function(summary) {
+                if (myGen !== root.requestGeneration) return
                 root.isBusy = false
+                root.busyStatus = "thinking"
                 root.activeXhr = null
+                root.activeAssistantIndex = -1
 
-                if (root.cancelRequested) {
-                    root.cancelRequested = false
-                    var partial = chatModel.get(assistantIndex).text
-                    if (partial === "") {
-                        chatModel.setProperty(assistantIndex, "text", root.tr("⏹ Request cancelled.", "⏹ Petición cancelada."))
-                        // Sin respuesta: retirar la pregunta sin contestar del contexto
-                        if (root.conversationHistory.length > 0 && root.conversationHistory[root.conversationHistory.length - 1].role === "user") {
-                            root.conversationHistory.pop()
-                        }
-                    } else {
-                        chatModel.setProperty(assistantIndex, "text", partial + "\n\n" + root.tr("⏹ _(cancelled)_", "⏹ _(cancelado)_"))
-                        root.conversationHistory.push({"role": "assistant", "content": partial})
+                // Si el modelo completó sin texto tras ejecutar herramientas, mostrar el resumen de la herramienta
+                if (chatModel.get(assistantIndex).text === "" && summary.toolFallbackText) {
+                    chatModel.setProperty(assistantIndex, "text", summary.toolFallbackText)
+                    if (root.conversationHistory.length > 0 && root.conversationHistory[root.conversationHistory.length - 1].role === "assistant") {
+                        root.conversationHistory[root.conversationHistory.length - 1].content = summary.toolFallbackText
                     }
-                    return
                 }
+            },
+            "onCancelled": function() {
+                if (myGen !== root.requestGeneration && !root.cancelRequested) return
+                root.finalizeCancelled(assistantIndex)
+            },
+            "onError": function(status) {
+                if (myGen !== root.requestGeneration) return
+                root.isBusy = false
+                root.busyStatus = "thinking"
+                root.activeXhr = null
+                root.activeAssistantIndex = -1
 
-                if (xhr.status === 200) {
-                    var finalAssistantText = chatModel.get(assistantIndex).text
-
-                    // Si hubo llamadas a herramientas, ejecutarlas mediante el runner local
-                    if (accumulatedToolCalls.length > 0) {
-                        for (var tc = 0; tc < accumulatedToolCalls.length; tc++) {
-                            var call = accumulatedToolCalls[tc]
-                            var fnName = call.function.name
-                            var fnArgs = JSON.stringify(call.function.arguments || {})
-                            var safeArgs = fnArgs.replace(/'/g, "'\\''")
-
-                            root.runCli("python3 '" + root.toolsScriptPath + "' --lang " + activeLang + " call " + fnName + " '" + safeArgs + "'", (code, stdout) => {
-                                try {
-                                    var res = JSON.parse(stdout.trim())
-                                    var defaultActionMsg = (activeLang === "en") ? "Action executed" : "Acción ejecutada"
-                                    var info = res.message || (res.success ? defaultActionMsg : res.error)
-                                    var curTools = chatModel.get(assistantIndex).toolInfo
-                                    var updated = curTools ? (curTools + " • " + info) : info
-                                    chatModel.setProperty(assistantIndex, "toolInfo", updated)
-
-                                    // Si el asistente no dijo nada de texto, poner el mensaje de la herramienta
-                                    if (chatModel.get(assistantIndex).text === "") {
-                                        chatModel.setProperty(assistantIndex, "text", info)
-                                    }
-                                    if (root.conversationHistory.length > 0 && root.conversationHistory[root.conversationHistory.length - 1].role === "assistant") {
-                                        root.conversationHistory[root.conversationHistory.length - 1].content = chatModel.get(assistantIndex).text
-                                    }
-                                } catch (e) {}
-                            })
-                        }
-                    }
-
-                    // Guardar en el historial para contexto multi-turno
-                    root.conversationHistory.push({
-                        "role": "assistant",
-                        "content": finalAssistantText
-                    })
-                } else {
-                    var errText = chatModel.get(assistantIndex).text
-                    if (errText === "") {
-                        chatModel.setProperty(assistantIndex, "text", root.tr("Error communicating with Ollama (" + xhr.status + "). Make sure it is running.", "Error al comunicar con Ollama (" + xhr.status + "). Asegúrate de que se está ejecutando."))
-                    }
+                var errText = chatModel.get(assistantIndex).text
+                if (errText === "") {
+                    var errMsg = root.isLocalOllama
+                        ? root.tr("Error communicating with Ollama (" + status + "). Make sure it is running.", "Error al comunicar con Ollama (" + status + "). Asegúrate de que se está ejecutando.")
+                        : root.tr("Error communicating with AI server (" + status + "). Check the URL, model, and API key.", "Error al comunicar con el servidor IA (" + status + "). Revisa la URL, el modelo y la API key.")
+                    chatModel.setProperty(assistantIndex, "text", errMsg)
                 }
             }
-        }
-
-        xhr.send(JSON.stringify(payload))
+        })
     }
 }

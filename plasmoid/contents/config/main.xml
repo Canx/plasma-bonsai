@@ -6,8 +6,17 @@
   <kcfgfile name=""/>
 
   <group name="General">
+    <entry name="endpointsJson" type="String">
+      <default></default>
+    </entry>
+    <entry name="activeEndpointId" type="String">
+      <default></default>
+    </entry>
     <entry name="ollamaUrl" type="String">
       <default>http://127.0.0.1:11434</default>
+    </entry>
+    <entry name="apiKey" type="String">
+      <default></default>
     </entry>
     <entry name="defaultModel" type="String">
       <default></default>
