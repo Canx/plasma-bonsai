@@ -1,0 +1,36 @@
+name: Release Plasmoid
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install zip
+        run: sudo apt-get update && sudo apt-get install -y zip
+
+      - name: Package .plasmoid
+        run: |
+          chmod +x scripts/package.sh
+          ./scripts/package.sh
+          sha256sum plasma-bonsai.plasmoid > plasma-bonsai.plasmoid.sha256
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          gh release create "$TAG" \
+            plasma-bonsai.plasmoid \
+            plasma-bonsai.plasmoid.sha256 \
+            --title "$TAG" \
+            --generate-notes
